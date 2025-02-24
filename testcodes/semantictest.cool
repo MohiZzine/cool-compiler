@@ -1,0 +1,29 @@
+class Animal {
+    name: String; 
+
+    greet() : String {
+        "Hello"
+    };
+
+};
+
+class Dog inherits Animal {
+    breed: String;
+    bark() : String {
+        {  // Begin method body block
+            let volume : Int <- 10 in {
+                volume <- 5;  // Semicolon added here to clearly end the assignment
+                // Optionally, include an expression here if needed.
+            };
+            "Woof!"  // This is now a separate expression in the block.
+        }
+    };
+};
+
+
+class Main{
+    main(): String {
+        let d : Dog <- new Dog in 
+            d.bark()
+    };
+};

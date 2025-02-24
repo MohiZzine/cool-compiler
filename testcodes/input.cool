@@ -1,0 +1,20 @@
+class Sum {
+    num1 : Int;
+    num2 : Int;
+
+    init(a : Int, b : Int) : Sum {
+        { 
+            new Sum;
+        }
+    };
+
+    sum() : Int {
+        5
+    };
+};
+
+class Main {
+    main(): Bool {
+        false
+    };
+};

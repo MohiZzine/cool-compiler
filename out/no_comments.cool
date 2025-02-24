@@ -1,0 +1,23 @@
+class Animal {
+    name: String; 
+
+    greet() : String {
+        "Hello"
+    };
+
+};
+
+class Dog inherits Animal {
+    breed: String;
+    bark() : String {
+        let volume : Int <- 10 in 
+            "Woof!"
+    };
+};
+
+class Main{
+    main(): Object {
+        let d : Dog <- new Dog in 
+            d.bark()
+    };
+};

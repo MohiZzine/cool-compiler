@@ -1,0 +1,39 @@
+@vtable.Sum = external global [2 x i8*] [i8* bitcast (%Sum* (%Sum*, i32, i32) ()* @Sum_init to i8*), i8* bitcast (i32 (%Sum*) ()* @Sum_sum to i8*)]
+@vtable.Main = external global [1 x i8*] [i8* bitcast (i1 (%Main*) ()* @Main_main to i8*)]
+
+define %Sum* (%Sum*, i32, i32) @Sum_init(%Sum* %self, i32 %a, i32 %b) {
+entry:
+	%0 = alloca %Sum*
+	store %Sum* %self, %Sum** %0
+	%1 = load %Sum*, %Sum** %0
+	%2 = alloca i32
+	store i32 %a, i32* %2
+	%3 = alloca i32
+	store i32 %b, i32* %3
+	%4 = call i8* @malloc(i64 64)
+	%5 = bitcast i8* %4 to %Sum*
+	%6 = getelementptr %Sum, %Sum* %5, i32 0, i32 0
+	store i32 1, i32* %6
+	%7 = bitcast [2 x i8*]* @vtable.Sum to i8*
+	%8 = getelementptr %Sum, %Sum* %5, i32 0, i32 1
+	store i8* %7, i8** %8
+	ret %Sum* %5
+}
+
+define i32 (%Sum*) @Sum_sum(%Sum* %self) {
+entry:
+	%0 = alloca %Sum*
+	store %Sum* %self, %Sum** %0
+	%1 = load %Sum*, %Sum** %0
+	ret i32 5
+}
+
+define i1 (%Main*) @Main_main(%Main* %self) {
+entry:
+	%0 = alloca %Main*
+	store %Main* %self, %Main** %0
+	%1 = load %Main*, %Main** %0
+	ret i1 false
+}
+
+declare i8* @malloc(i64 %size)

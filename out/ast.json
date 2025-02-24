@@ -1,0 +1,66 @@
+{
+  "Classes": [
+    {
+      "Name": "Sum",
+      "Parent": "",
+      "Attributes": [
+        {
+          "Name": "num1",
+          "Type": "Int",
+          "InitValue": null
+        },
+        {
+          "Name": "num2",
+          "Type": "Int",
+          "InitValue": null
+        }
+      ],
+      "Methods": [
+        {
+          "Name": "init",
+          "Parameters": [
+            {
+              "Name": "a",
+              "Type": "Int"
+            },
+            {
+              "Name": "b",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Sum",
+          "Body": {
+            "Expressions": [
+              {
+                "Type": "Sum"
+              }
+            ]
+          }
+        },
+        {
+          "Name": "sum",
+          "Parameters": null,
+          "ReturnType": "Int",
+          "Body": {
+            "Value": 5
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Main",
+      "Parent": "",
+      "Attributes": [],
+      "Methods": [
+        {
+          "Name": "main",
+          "Parameters": null,
+          "ReturnType": "Bool",
+          "Body": {
+            "Value": false
+          }
+        }
+      ]
+    }
+  ]
+}
