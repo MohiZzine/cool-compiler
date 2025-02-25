@@ -99,7 +99,7 @@ func main() {
 
 	// Generate LLVM IR from the AST.
 	irGen := irgen.NewIRGenerator()
-	mod, err := irGen.GenerateModule(program)
+	mod := irGen.Generate(program)
 	if err != nil {
 		log.Fatalf("IR generation failed: %v", err)
 	}
@@ -112,7 +112,7 @@ func main() {
 	}
 	defer outFile.Close()
 
-	_, err = outFile.WriteString(mod.String())
+	_, err = outFile.WriteString(mod)
 	if err != nil {
 		log.Fatalf("Failed to write LLVM IR to output file: %v", err)
 	}
