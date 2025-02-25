@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
+	"io"
 	"os"
+	"path/filepath"
 
 	"cool-compiler/irgen"
 	"cool-compiler/lexer"
@@ -16,7 +16,7 @@ import (
 )
 
 // stringReader returns an io.Reader from a string.
-func stringReader(s string) io.Reader {
+func stringReader(s string) *stringReaderWrapper {
 	return &stringReaderWrapper{s: s}
 }
 
@@ -44,15 +44,15 @@ func main() {
 	}
 
 	// Read the file contents.
-	sourceData, err := ioutil.ReadFile(*inputFile)
+	sourceData, err := os.ReadFile(*inputFile)
 	if err != nil {
 		log.Fatalf("Error reading file: %v", err)
 	}
 
-	// Remove comments from the source using your RemoveComments function.
-	cleanSource, err := lexer.RemoveComments(stringReader(string(sourceData)))
+	// Remove comments from the source using RemoveComments function.
+	cleanSource, err := lexer.RemoveComments(stringReader(string(sourceData))) // FIXED
 	if err != nil {
-		log.Fatalf("Error removing comments: %v", err)
+		log.Fatalf("Error processing comments: %v", err)
 	}
 
 	// Create a new lexer using the cleaned source.
@@ -62,9 +62,15 @@ func main() {
 	p := parser.NewParser(lex)
 	program := p.ParseProgram()
 
-	// marshal program and save it to out/ast.json
-	
-	progfile, err := os.Create("out/ast.json")
+	// Ensure the "out" directory exists before writing output files.
+	outDir := "out"
+	if err := os.MkdirAll(outDir, os.ModePerm); err != nil {
+		log.Fatalf("Failed to create output directory: %v", err)
+	}
+
+	// Save AST to JSON file
+	astFilePath := filepath.Join(outDir, "ast.json")
+	progfile, err := os.Create(astFilePath)
 	if err != nil {
 		log.Fatalf("Error creating file: %v", err)
 	}
@@ -76,8 +82,9 @@ func main() {
 	}
 
 	_, err = progfile.Write(jsonProg)
-
-
+	if err != nil {
+		log.Fatalf("Error writing AST JSON file: %v", err)
+	}
 
 	// Build the symbol table from the parsed AST.
 	symbolTable := semantic.BuildSymbolTable(program)
@@ -86,8 +93,7 @@ func main() {
 	semAnalyzer := semantic.NewSemanticAnalyzer(symbolTable)
 	err = semAnalyzer.Analyze(program)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Semantic analysis failed: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Semantic analysis failed: %v", err)
 	}
 	fmt.Println("Semantic analysis succeeded. No errors found!")
 
@@ -99,8 +105,8 @@ func main() {
 	}
 
 	// Write the generated LLVM IR to out/out.txt.
-	outPath := "out/out.txt"
-	outFile, err := os.Create(outPath)
+	irPath := filepath.Join(outDir, "out.txt")
+	outFile, err := os.Create(irPath)
 	if err != nil {
 		log.Fatalf("Failed to create output file: %v", err)
 	}
@@ -111,5 +117,5 @@ func main() {
 		log.Fatalf("Failed to write LLVM IR to output file: %v", err)
 	}
 
-	fmt.Printf("LLVM IR successfully generated and written to %s\n", outPath)
+	fmt.Printf("LLVM IR successfully generated and written to %s\n", irPath)
 }

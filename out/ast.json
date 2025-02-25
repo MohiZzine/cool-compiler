@@ -1,48 +1,68 @@
 {
   "Classes": [
     {
-      "Name": "Sum",
+      "Name": "Animal",
       "Parent": "",
       "Attributes": [
         {
-          "Name": "num1",
-          "Type": "Int",
-          "InitValue": null
-        },
-        {
-          "Name": "num2",
-          "Type": "Int",
+          "Name": "name",
+          "Type": "String",
           "InitValue": null
         }
       ],
       "Methods": [
         {
-          "Name": "init",
-          "Parameters": [
-            {
-              "Name": "a",
-              "Type": "Int"
-            },
-            {
-              "Name": "b",
-              "Type": "Int"
-            }
-          ],
-          "ReturnType": "Sum",
+          "Name": "greet",
+          "Parameters": null,
+          "ReturnType": "String",
+          "Body": {
+            "Value": "Hello"
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Dog",
+      "Parent": "Animal",
+      "Attributes": [
+        {
+          "Name": "breed",
+          "Type": "String",
+          "InitValue": null
+        }
+      ],
+      "Methods": [
+        {
+          "Name": "bark",
+          "Parameters": null,
+          "ReturnType": "String",
           "Body": {
             "Expressions": [
               {
-                "Type": "Sum"
+                "Variables": [
+                  {
+                    "Name": "volume",
+                    "Type": "Int",
+                    "InitValue": {
+                      "Value": 10
+                    }
+                  }
+                ],
+                "Body": {
+                  "Expressions": [
+                    {
+                      "Name": "volume",
+                      "Value": {
+                        "Value": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "Value": "Woof!"
               }
             ]
-          }
-        },
-        {
-          "Name": "sum",
-          "Parameters": null,
-          "ReturnType": "Int",
-          "Body": {
-            "Value": 5
           }
         }
       ]
@@ -55,9 +75,24 @@
         {
           "Name": "main",
           "Parameters": null,
-          "ReturnType": "Bool",
+          "ReturnType": "String",
           "Body": {
-            "Value": false
+            "Variables": [
+              {
+                "Name": "d",
+                "Type": "Dog",
+                "InitValue": {
+                  "Type": "Dog"
+                }
+              }
+            ],
+            "Body": {
+              "Caller": {
+                "Name": "d"
+              },
+              "Method": "bark",
+              "Arguments": null
+            }
           }
         }
       ]

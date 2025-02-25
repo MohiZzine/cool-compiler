@@ -178,23 +178,31 @@ During IR generation, vtables must be constructed from all method prototypes bef
 A Makefile automates the compilation process:
 
 ```make
-# Compile COOL source code into LLVM IR
-%.ll: %.cl
-	$(COMPILER) $< -o $@
+CC = clang
+LLC = llc
+OPT = opt
+GO_BUILD = go build -o cool-compiler
+COMPILER = ./cool-compiler
+TARGET = out/cool_program
 
-# Apply optimization passes
-%.opt.ll: %.ll
-	$(OPT) -constprop -dce $< -o $@
+build:
+	$(GO_BUILD)
 
-# Generate assembly
-%.s: %.opt.ll
-	$(LLC) $< -o $@
+ir: build
+	$(COMPILER) -i testcodes/semantictest.cool
 
-# Link to create executable
-%: %.s
-	$(CC) $< -o $@
+opt: ir
+	$(OPT) -passes=instcombine,dce out/out.txt -o out/out.opt.ll
+
+asm: opt
+	$(LLC) out/out.opt.ll -o out/out.s
+
+link: asm
+	$(CC) out/out.s -o $(TARGET)
+
+all: link
 
 clean:
-	rm -f *.ll *.opt.ll *.s $(TARGET)
+	rm -f cool-compiler out/out.txt out/out.opt.ll out/out.s $(TARGET)
 ```
 

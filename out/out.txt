@@ -1,39 +1,53 @@
-@vtable.Sum = external global [2 x i8*] [i8* bitcast (%Sum* (%Sum*, i32, i32) ()* @Sum_init to i8*), i8* bitcast (i32 (%Sum*) ()* @Sum_sum to i8*)]
-@vtable.Main = external global [1 x i8*] [i8* bitcast (i1 (%Main*) ()* @Main_main to i8*)]
+@vtable.Animal = global [1 x i8*] [i8* bitcast (i8* (%Animal*) ()* @Animal_greet to i8*)]
+@vtable.Dog = global [2 x i8*] [i8* bitcast (i8* (%Animal*) ()* @Animal_greet to i8*), i8* bitcast (i8* (%Dog*) ()* @Dog_bark to i8*)]
+@vtable.Main = global [1 x i8*] [i8* bitcast (i8* (%Main*) ()* @Main_main to i8*)]
+@.str.5 = constant [6 x i8] c"Hello\00"
+@.str.5 = constant [6 x i8] c"Woof!\00"
 
-define %Sum* (%Sum*, i32, i32) @Sum_init(%Sum* %self, i32 %a, i32 %b) {
+define i8* (%Animal*) @Animal_greet(%Animal* %self) {
 entry:
-	%0 = alloca %Sum*
-	store %Sum* %self, %Sum** %0
-	%1 = load %Sum*, %Sum** %0
+	%0 = alloca %Animal*
+	store %Animal* %self, %Animal** %0
+	%1 = load %Animal*, %Animal** %0
+	%2 = getelementptr [6 x i8], [6 x i8]* @.str.5, i32 0, i32 0
+	ret i8* %2
+}
+
+define i8* (%Dog*) @Dog_bark(%Dog* %self) {
+entry:
+	%0 = alloca %Dog*
+	store %Dog* %self, %Dog** %0
+	%1 = load %Dog*, %Dog** %0
 	%2 = alloca i32
-	store i32 %a, i32* %2
-	%3 = alloca i32
-	store i32 %b, i32* %3
-	%4 = call i8* @malloc(i64 64)
-	%5 = bitcast i8* %4 to %Sum*
-	%6 = getelementptr %Sum, %Sum* %5, i32 0, i32 0
-	store i32 1, i32* %6
-	%7 = bitcast [2 x i8*]* @vtable.Sum to i8*
-	%8 = getelementptr %Sum, %Sum* %5, i32 0, i32 1
-	store i8* %7, i8** %8
-	ret %Sum* %5
+	store i32 10, i32* %2
+	store i32 5, i32* %2
+	%3 = getelementptr [6 x i8], [6 x i8]* @.str.5, i32 0, i32 0
+	ret i8* %3
 }
 
-define i32 (%Sum*) @Sum_sum(%Sum* %self) {
-entry:
-	%0 = alloca %Sum*
-	store %Sum* %self, %Sum** %0
-	%1 = load %Sum*, %Sum** %0
-	ret i32 5
-}
-
-define i1 (%Main*) @Main_main(%Main* %self) {
+define i8* (%Main*) @Main_main(%Main* %self) {
 entry:
 	%0 = alloca %Main*
 	store %Main* %self, %Main** %0
 	%1 = load %Main*, %Main** %0
-	ret i1 false
+	%2 = alloca %Dog*
+	%3 = call i8* @malloc(i64 64)
+	%4 = bitcast i8* %3 to %Dog*
+	%5 = getelementptr %Dog, %Dog* %4, i32 0, i32 0
+	store i32 2, i32* %5
+	%6 = bitcast [2 x i8*]* @vtable.Dog to i8*
+	%7 = getelementptr %Dog, %Dog* %4, i32 0, i32 1
+	store i8* %6, i8** %7
+	store %Dog* %4, %Dog** %2
+	%8 = load %Dog*, %Dog** %2
+	%9 = getelementptr %Dog, %Dog* %8, i32 0, i32 1
+	%10 = load i8*, i8** %9
+	%11 = bitcast i8* %10 to [2 x i8*]*
+	%12 = getelementptr i8*, [2 x i8*]* %11, i32 1
+	%13 = load i8*, i8** %12
+	%14 = bitcast i8* %13 to i32 (i8*)*
+	%15 = call i32 %14(%Dog* %8)
+	ret i32 %15
 }
 
 declare i8* @malloc(i64 %size)

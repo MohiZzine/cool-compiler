@@ -14,15 +14,14 @@ import (
 )
 
 // IRGenerator holds the LLVM module and maps for class types, type tags, vtables, and methods.
-// We now store a pointer to the program (AST) and also methodOrders to determine vtable layout.
 type IRGenerator struct {
 	mod          *ir.Module
 	classTypes   map[string]*types.StructType
 	typeTags     map[string]int
 	vtableMap    map[string]value.Value
 	methodFuncs  map[string]*ir.Func
-	Program      *ast.Program          // stored AST
-	methodOrders map[string][]string   // vtable order for each class
+	Program      *ast.Program        // stored AST
+	methodOrders map[string][]string // vtable order for each class
 }
 
 // NewIRGenerator creates a new IR generator with an empty LLVM module.
@@ -37,21 +36,20 @@ func NewIRGenerator() *IRGenerator {
 	}
 }
 
-// getParentName returns the declared parent of the given class (or "" if none)
-// by looking it up in the stored program (AST).
+// getParentName returns the declared parent of the given class (or "" if none).
 func (gen *IRGenerator) getParentName(className string) string {
 	if gen.Program == nil {
 		return ""
 	}
 	for _, cls := range gen.Program.Classes {
 		if cls.Name == className {
-			return cls.Parent // returns "" if no parent is specified
+			return cls.Parent
 		}
 	}
 	return ""
 }
 
-// getVtable recursively looks up the vtable for a given type, falling back to its parent's vtable.
+// getVtable recursively looks up the vtable for a given type.
 func (gen *IRGenerator) getVtable(typeName string) (value.Value, error) {
 	if vt, ok := gen.vtableMap[typeName]; ok {
 		return vt, nil
@@ -63,10 +61,9 @@ func (gen *IRGenerator) getVtable(typeName string) (value.Value, error) {
 	return gen.getVtable(parent)
 }
 
-// BuildVTables constructs vtables for all classes, ensuring parents are built first.
+// BuildVTables constructs vtables for all classes.
 func (gen *IRGenerator) BuildVTables(program *ast.Program) error {
 	fmt.Println("[DEBUG] Starting vtable construction")
-	// Store the program so that getParentName can access it.
 	gen.Program = program
 
 	processed := make(map[string]bool)
@@ -87,7 +84,7 @@ func (gen *IRGenerator) BuildVTables(program *ast.Program) error {
 			}
 		}
 
-		// Process methods declared in this class (in AST order).
+		// Process methods declared in this class.
 		for _, cls := range program.Classes {
 			if cls.Name != className {
 				continue
@@ -97,7 +94,6 @@ func (gen *IRGenerator) BuildVTables(program *ast.Program) error {
 				found := false
 				for i, mName := range order {
 					if mName == method.Name {
-						// Override parent's slot.
 						order[i] = method.Name
 						found = true
 						break
@@ -108,18 +104,26 @@ func (gen *IRGenerator) BuildVTables(program *ast.Program) error {
 				}
 			}
 		}
-		// Save the computed order for this class.
 		gen.methodOrders[className] = order
 
-		// Build the vtable entries in the order computed.
+		// Define a common variadic function type for all methods.
+		// We choose: i8* (i8*, ...), meaning that the first parameter (self)
+		// is always an i8* and the function returns an i8*. Additional arguments
+		// (if any) are passed variadically.
+		commonFuncType := types.NewFunc(types.NewPointer(types.I8), []types.Type{types.NewPointer(types.I8)}...)
+		commonFuncType.Variadic = true
+		commonFuncPtrType := types.NewPointer(commonFuncType)
+
+		// Build the vtable entries.
 		var entries []constant.Constant
 		for _, mName := range order {
 			funcName := className + "_" + mName
 			if f, ok := gen.methodFuncs[funcName]; ok {
-				fp := constant.NewBitCast(f, types.NewPointer(types.I8))
+				// Bitcast the method pointer to our common function pointer type.
+				fp := constant.NewBitCast(f, commonFuncPtrType)
 				entries = append(entries, fp)
 			} else {
-				// If not found in this class, try parent's vtable.
+				// Fallback: inherit from parent's vtable.
 				if parent := gen.getParentName(className); parent != "" {
 					parentIndex, err := gen.getMethodIndexForCaller(mName, nil, parent)
 					if err != nil {
@@ -140,22 +144,19 @@ func (gen *IRGenerator) BuildVTables(program *ast.Program) error {
 			}
 		}
 
-		// Create a constant array for the vtable.
-		arrType := types.NewArray(uint64(len(entries)), types.NewPointer(types.I8))
+		// Create the vtable global with an array of our common function pointer type.
+		arrType := types.NewArray(uint64(len(entries)), commonFuncPtrType)
 		vtableConst := constant.NewArray(arrType, entries...)
 		globalVtable := gen.mod.NewGlobalDef("vtable."+className, vtableConst)
-		globalVtable.Linkage = enum.LinkageExternal
 		gen.vtableMap[className] = globalVtable
 		processed[className] = true
 		fmt.Printf("[DEBUG] Stored vtable for: %s with %d entries\n", className, len(entries))
 	}
 
-	// Process all classes.
 	for _, class := range program.Classes {
 		fmt.Printf("[DEBUG] BuildVTables: Processing class %s (parent=%q)\n", class.Name, class.Parent)
 		processClass(class.Name)
 	}
-
 	fmt.Println("[DEBUG] Vtable construction completed.")
 	return nil
 }
@@ -181,12 +182,13 @@ func (gen *IRGenerator) mapCoolType(coolType string) types.Type {
 func (gen *IRGenerator) PrototypeMethods(program *ast.Program) error {
 	for _, class := range program.Classes {
 		for _, method := range class.Methods {
-			thisType := types.NewPointer(gen.classTypes[class.Name])
+			// For uniformity in the vtable, we force self to be an i8*.
+			thisType := types.NewPointer(types.I8)
+			retType := types.NewPointer(types.I8)
 			paramTypes := []types.Type{thisType}
 			for _, param := range method.Parameters {
 				paramTypes = append(paramTypes, gen.mapCoolType(param.Type))
 			}
-			retType := gen.mapCoolType(method.ReturnType)
 			funcType := types.NewFunc(retType, paramTypes...)
 
 			funcName := class.Name + "_" + method.Name
@@ -208,7 +210,6 @@ func (gen *IRGenerator) PrototypeMethods(program *ast.Program) error {
 
 // GenerateMethodBodies generates LLVM function bodies for all methods.
 func (gen *IRGenerator) GenerateMethodBodies(program *ast.Program) error {
-	// Now that vtables are built, generate method bodies.
 	for _, class := range program.Classes {
 		for _, method := range class.Methods {
 			funcName := class.Name + "_" + method.Name
@@ -218,15 +219,12 @@ func (gen *IRGenerator) GenerateMethodBodies(program *ast.Program) error {
 			}
 			entry := f.NewBlock("entry")
 			env := make(map[string]value.Value)
-			thisType := types.NewPointer(gen.classTypes[class.Name])
-			// Allocate and store self.
-			selfAlloca := entry.NewAlloca(thisType)
+			// Note: self is now an i8*; you may need to cast it to the actual type when needed.
+			selfAlloca := entry.NewAlloca(f.Params[0].Type())
 			entry.NewStore(f.Params[0], selfAlloca)
-			// Immediately load self and update the environment.
-			loadedSelf := entry.NewLoad(thisType, selfAlloca)
+			loadedSelf := entry.NewLoad(f.Params[0].Type().(*types.PointerType).ElemType, selfAlloca)
 			env["self"] = loadedSelf
 
-			// Allocate and store parameters.
 			for i, param := range method.Parameters {
 				paramVal := f.Params[i+1]
 				alloca := entry.NewAlloca(gen.mapCoolType(param.Type))
@@ -245,7 +243,6 @@ func (gen *IRGenerator) GenerateMethodBodies(program *ast.Program) error {
 }
 
 // codegenExpr recursively generates LLVM IR for a COOL expression.
-// It covers all AST expression types.
 func (gen *IRGenerator) codegenExpr(expr ast.Expr, block *ir.Block, env map[string]value.Value) (value.Value, error) {
 	if expr == nil {
 		return nil, fmt.Errorf("nil expression")
@@ -266,8 +263,7 @@ func (gen *IRGenerator) codegenExpr(expr ast.Expr, block *ir.Block, env map[stri
 		if !ok {
 			return nil, fmt.Errorf("undefined variable: %s", e.Name)
 		}
-		ptrType := ptr.Type().(*types.PointerType)
-		return block.NewLoad(ptrType.ElemType, ptr), nil
+		return block.NewLoad(ptr.Type().(*types.PointerType).ElemType, ptr), nil
 	case *ast.AssignExpr:
 		ptr, ok := env[e.Name]
 		if !ok {
@@ -340,7 +336,6 @@ func (gen *IRGenerator) codegenExpr(expr ast.Expr, block *ir.Block, env map[stri
 			last = val
 		}
 		return last, nil
-	// Support both CallExpr and DispatchExpr by using codegenDispatch.
 	case *ast.CallExpr:
 		return gen.codegenDispatch(e.Caller, e.Method, e.Args, block, env)
 	case *ast.DispatchExpr:
@@ -450,7 +445,6 @@ func (gen *IRGenerator) codegenExpr(expr ast.Expr, block *ir.Block, env map[stri
 			args = append(args, a)
 		}
 		return block.NewCall(callee, args...), nil
-	// For new expressions.
 	case *ast.NewExpr:
 		return gen.codegenNewExpr(e, block, env)
 	case ast.NewExpr:
@@ -506,65 +500,53 @@ func (gen *IRGenerator) codegenExpr(expr ast.Expr, block *ir.Block, env map[stri
 	}
 }
 
-// codegenDispatch generates LLVM IR for a method call (dispatch), used for both CallExpr and DispatchExpr.
+// codegenDispatch generates LLVM IR for a method call.
 func (gen *IRGenerator) codegenDispatch(callerExpr ast.Expr, methodName string, args []ast.Expr, block *ir.Block, env map[string]value.Value) (value.Value, error) {
-	// Evaluate the caller expression.
 	callerVal, err := gen.codegenExpr(callerExpr, block, env)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the caller's vtable pointer address.
 	vtablePtrPtr := block.NewGetElementPtr(gen.classTypesFromValue(callerVal), callerVal,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 1))
-	
-	// Load the stored vtable pointer (currently of type pointer to i8).
 	vtablePtr := block.NewLoad(vtablePtrPtr.Type().(*types.PointerType).ElemType, vtablePtrPtr)
 
-	// Retrieve the caller's class type.
 	classType := gen.classTypesFromValue(callerVal)
 	if classType == nil {
 		return nil, fmt.Errorf("could not determine class type from caller")
 	}
-	
-	// Get the method order for this class.
+
 	order, ok := gen.methodOrders[classType.Name()]
 	if !ok {
 		return nil, fmt.Errorf("no method order for class %s", classType.Name())
 	}
-	
-	// Create an array type with length equal to the number of methods,
-	// where each element is a pointer to i8.
-	arrType := types.NewArray(uint64(len(order)), types.NewPointer(types.I8))
-	
-	// Bitcast the vtable pointer (of type pointer to i8) back to a pointer to the array type.
+
+	// Use the same common variadic function type as before.
+	commonFuncType := types.NewFunc(types.NewPointer(types.I8), []types.Type{types.NewPointer(types.I8)}...)
+	commonFuncType.Variadic = true
+	commonFuncPtrType := types.NewPointer(commonFuncType)
+	arrType := types.NewArray(uint64(len(order)), commonFuncPtrType)
+
 	castedVtable := block.NewBitCast(vtablePtr, types.NewPointer(arrType))
-	
-	// Look up the method index in the vtable.
+
 	methodIndex, err := gen.getMethodIndexForCaller(methodName, callerVal, "")
 	if err != nil {
 		return nil, err
 	}
-	
-	// Retrieve the method pointer pointer from the recovered array type.
+
 	methodPtrPtr := block.NewGetElementPtr(arrType.ElemType, castedVtable,
 		constant.NewInt(types.I32, int64(methodIndex)))
-	
 	ptrType2, ok := methodPtrPtr.Type().(*types.PointerType)
 	if !ok {
 		return nil, fmt.Errorf("method pointer ptr type error")
 	}
-	
-	// Load the method pointer.
 	methodPtr := block.NewLoad(ptrType2.ElemType, methodPtrPtr)
-	
-	// Define the function type for the method call.
-	funcType := types.NewFunc(types.I32, types.NewPointer(types.I8))
-	
-	// Bitcast the method pointer to a pointer to the function type.
+
+	// In dispatch, use the same common variadic function type.
+	funcType := types.NewFunc(types.NewPointer(types.I8), []types.Type{types.NewPointer(types.I8)}...)
+	funcType.Variadic = true
 	castedPtr := block.NewBitCast(methodPtr, types.NewPointer(funcType))
-	
-	// Evaluate each argument.
+
 	callArgs := []value.Value{callerVal}
 	for _, arg := range args {
 		a, err := gen.codegenExpr(arg, block, env)
@@ -573,12 +555,10 @@ func (gen *IRGenerator) codegenDispatch(callerExpr ast.Expr, methodName string, 
 		}
 		callArgs = append(callArgs, a)
 	}
-	
-	// Emit the call instruction.
 	return block.NewCall(castedPtr, callArgs...), nil
 }
 
-// codegenNewExpr is a helper to generate IR for a NewExpr node.
+// codegenNewExpr generates IR for a NewExpr node.
 func (gen *IRGenerator) codegenNewExpr(e *ast.NewExpr, block *ir.Block, env map[string]value.Value) (value.Value, error) {
 	classType, ok := gen.classTypes[e.Type]
 	if !ok {
@@ -601,7 +581,6 @@ func (gen *IRGenerator) codegenNewExpr(e *ast.NewExpr, block *ir.Block, env map[
 	ttPtr := block.NewGetElementPtr(classType, objPtr,
 		constant.NewInt(types.I32, 0), constant.NewInt(types.I32, 0))
 	block.NewStore(typeTag, ttPtr)
-	// Use getVtable to allow fallback to parent's vtable if needed.
 	vtableGlobal, err := gen.getVtable(e.Type)
 	if err != nil {
 		return nil, fmt.Errorf("new: %v", err)
@@ -633,7 +612,6 @@ func (gen *IRGenerator) classTypesFromValue(val value.Value) *types.StructType {
 }
 
 // getMethodIndexForCaller returns the index of the given method in the caller’s vtable.
-// If overrideClass is non-empty, it looks up that class's method order instead.
 func (gen *IRGenerator) getMethodIndexForCaller(methodName string, caller value.Value, overrideClass string) (int, error) {
 	var className string
 	if overrideClass != "" {
@@ -657,7 +635,7 @@ func (gen *IRGenerator) getMethodIndexForCaller(methodName string, caller value.
 	return 0, fmt.Errorf("method %s not found in vtable for class %s", methodName, className)
 }
 
-// runtimeErrorFunc returns the runtime error function, creating it if necessary.
+// runtimeErrorFunc returns the runtime error function.
 func (gen *IRGenerator) runtimeErrorFunc() *ir.Func {
 	name := "runtime_error"
 	for _, f := range gen.mod.Funcs {
@@ -669,7 +647,6 @@ func (gen *IRGenerator) runtimeErrorFunc() *ir.Func {
 }
 
 // codegenNewObject creates a new object of the given class.
-// (This function is currently not invoked by the rest of the code.)
 func (gen *IRGenerator) codegenNewObject(className string, block *ir.Block) (value.Value, error) {
 	classType, ok := gen.classTypes[className]
 	if !ok {
@@ -734,20 +711,16 @@ func (gen *IRGenerator) BuildClassTypes(program *ast.Program) error {
 
 // GenerateModule runs all phases and returns the complete LLVM module.
 func (gen *IRGenerator) GenerateModule(program *ast.Program) (*ir.Module, error) {
-	// Store the program so that getParentName works correctly.
 	gen.Program = program
 	if err := gen.BuildClassTypes(program); err != nil {
 		return nil, err
 	}
-	// First, prototype all methods.
 	if err := gen.PrototypeMethods(program); err != nil {
 		return nil, err
 	}
-	// Then build vtables.
 	if err := gen.BuildVTables(program); err != nil {
 		return nil, err
 	}
-	// Finally, generate method bodies.
 	if err := gen.GenerateMethodBodies(program); err != nil {
 		return nil, err
 	}
@@ -757,4 +730,3 @@ func (gen *IRGenerator) GenerateModule(program *ast.Program) (*ir.Module, error)
 	}
 	return gen.mod, nil
 }
-
