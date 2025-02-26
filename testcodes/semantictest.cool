@@ -1,29 +1,22 @@
-class Animal {
-    name: String; 
-
-    greet() : String {
-        "Hello"
+class ktest {
+    k: Int; 
+    
+    getK(): Int {
+        k;
     };
 
-};
-
-class Dog inherits Animal {
-    breed: String;
-    bark() : String {
-        {  // Begin method body block
-            let volume : Int <- 10 in {
-                volume <- 5;  // Semicolon added here to clearly end the assignment
-                // Optionally, include an expression here if needed.
-            };
-            "Woof!"  // This is now a separate expression in the block.
+    setK(new_k: Int): SELF_TYPE { 
+        {
+            k <- new_k; 
+            self;
         }
     };
 };
 
-
-class Main{
-    main(): String {
-        let d : Dog <- new Dog in 
-            d.bark()
+class Main inherits IO {
+    main(): Object {
+        let d1: ktest <- (new ktest).setK(2) in
+            self.out_int(d1.getK()); -- Should print 2
     };
 };
+

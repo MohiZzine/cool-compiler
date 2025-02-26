@@ -1,66 +1,180 @@
 {
   "Classes": [
     {
-      "Name": "Animal",
+      "Name": "Object",
       "Parent": "",
-      "Attributes": [
-        {
-          "Name": "name",
-          "Type": "String",
-          "InitValue": null
-        }
-      ],
+      "Attributes": null,
       "Methods": [
         {
-          "Name": "greet",
+          "Name": "abort",
+          "Parameters": null,
+          "ReturnType": "Object",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "type_name",
           "Parameters": null,
           "ReturnType": "String",
           "Body": {
-            "Value": "Hello"
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "copy",
+          "Parameters": null,
+          "ReturnType": "SELF_TYPE",
+          "Body": {
+            "Expressions": null
           }
         }
       ]
     },
     {
-      "Name": "Dog",
-      "Parent": "Animal",
+      "Name": "IO",
+      "Parent": "Object",
+      "Attributes": null,
+      "Methods": [
+        {
+          "Name": "out_string",
+          "Parameters": [
+            {
+              "Name": "x",
+              "Type": "String"
+            }
+          ],
+          "ReturnType": "SELF_TYPE",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "out_int",
+          "Parameters": [
+            {
+              "Name": "x",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "SELF_TYPE",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "in_string",
+          "Parameters": null,
+          "ReturnType": "String",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "in_int",
+          "Parameters": null,
+          "ReturnType": "Int",
+          "Body": {
+            "Expressions": null
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Int",
+      "Parent": "Object",
+      "Attributes": null,
+      "Methods": null
+    },
+    {
+      "Name": "String",
+      "Parent": "Object",
+      "Attributes": null,
+      "Methods": [
+        {
+          "Name": "length",
+          "Parameters": null,
+          "ReturnType": "Int",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "concat",
+          "Parameters": [
+            {
+              "Name": "s",
+              "Type": "String"
+            }
+          ],
+          "ReturnType": "String",
+          "Body": {
+            "Expressions": null
+          }
+        },
+        {
+          "Name": "substr",
+          "Parameters": [
+            {
+              "Name": "i",
+              "Type": "Int"
+            },
+            {
+              "Name": "l",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "String",
+          "Body": {
+            "Expressions": null
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Bool",
+      "Parent": "Object",
+      "Attributes": null,
+      "Methods": null
+    },
+    {
+      "Name": "ktest",
+      "Parent": "Object",
       "Attributes": [
         {
-          "Name": "breed",
-          "Type": "String",
+          "Name": "k",
+          "Type": "Int",
           "InitValue": null
         }
       ],
       "Methods": [
         {
-          "Name": "bark",
+          "Name": "getK",
           "Parameters": null,
-          "ReturnType": "String",
+          "ReturnType": "Int",
+          "Body": {
+            "Name": "k"
+          }
+        },
+        {
+          "Name": "setK",
+          "Parameters": [
+            {
+              "Name": "new_k",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "SELF_TYPE",
           "Body": {
             "Expressions": [
               {
-                "Variables": [
-                  {
-                    "Name": "volume",
-                    "Type": "Int",
-                    "InitValue": {
-                      "Value": 10
-                    }
-                  }
-                ],
-                "Body": {
-                  "Expressions": [
-                    {
-                      "Name": "volume",
-                      "Value": {
-                        "Value": 5
-                      }
-                    }
-                  ]
+                "Name": "k",
+                "Value": {
+                  "Name": "new_k"
                 }
               },
               {
-                "Value": "Woof!"
+                "Name": "self"
               }
             ]
           }
@@ -69,29 +183,45 @@
     },
     {
       "Name": "Main",
-      "Parent": "",
+      "Parent": "IO",
       "Attributes": [],
       "Methods": [
         {
           "Name": "main",
           "Parameters": null,
-          "ReturnType": "String",
+          "ReturnType": "Object",
           "Body": {
             "Variables": [
               {
-                "Name": "d",
-                "Type": "Dog",
+                "Name": "d1",
+                "Type": "ktest",
                 "InitValue": {
-                  "Type": "Dog"
+                  "Caller": {
+                    "Type": "ktest"
+                  },
+                  "Method": "setK",
+                  "Arguments": [
+                    {
+                      "Value": 2
+                    }
+                  ]
                 }
               }
             ],
             "Body": {
               "Caller": {
-                "Name": "d"
+                "Name": "self"
               },
-              "Method": "bark",
-              "Arguments": null
+              "Method": "out_int",
+              "Arguments": [
+                {
+                  "Caller": {
+                    "Name": "d1"
+                  },
+                  "Method": "getK",
+                  "Arguments": null
+                }
+              ]
             }
           }
         }

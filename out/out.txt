@@ -1,2 +1,56 @@
 ; ModuleID = 'cool_module'
+@.str0 = private unnamed_addr constant [7 x i8] c"Object\00"
+
+define i32 @ktest_getK(i8* %self) {
+  %t0 = bitcast i8* %self to i32*   ; Cast self to an i32* (assuming k is the first field)
+  %t1 = load i32, i32* %t0          ; Load k from object memory
+  ret i32 %t1
+}
+
+define i8* @ktest_setK(i8* %self, i32 %new_k) {
+  %t0 = bitcast i8* %self to i32*   ; Cast self to i32* (pointing to k)
+  store i32 %new_k, i32* %t0        ; Store new value into object's memory
+  ret i8* %self                     ; Return self
+}
+
+define i8* @ktest_new() {
+  %size = add i32 8, 0               ; Allocate space (8 bytes, 4 for k, 4 padding)
+  %ptr = call i8* @malloc(i32 %size) ; Allocate memory
+  store i32 0, i32* %ptr             ; Initialize k to 0
+  ret i8* %ptr
+}
+
+define i8* @Main_main(i8* %self) {
+  %t0 = alloca i8*
+  store i8* %self, i8** %t0
+  %t1 = call i8* @ktest_new()
+  %t2 = call i8* (i8*, i32) @ktest_setK(i8* %t1, i32 2)  ; Set k = 2
+  %t3 = call i32 (i8*) @ktest_getK(i8* %t2)              ; Get k
+  %t4 = call i8* (i8*, i32) @IO_out_int(i8* %self, i32 %t3)  ; Print k
+  ret i8* %t4
+}
+
+define i8* @Main_new() {
+  %size = add i32 8, 0
+  %ptr = call i8* @malloc(i32 %size)
+  ret i8* %ptr
+}
+
+; Declare external functions
 declare i32 @printf(i8*, ...)
+declare i8* @malloc(i32)
+declare void @exit(i32)
+
+@.fmt_int = private constant [4 x i8] c"%d\0A\00"
+
+define i8* @IO_out_int(i8* %self, i32 %x) {
+  %fmt_ptr = getelementptr inbounds [4 x i8], [4 x i8]* @.fmt_int, i32 0, i32 0
+  call i32 (i8*, ...) @printf(i8* %fmt_ptr, i32 %x)
+  ret i8* %self
+}
+
+define i32 @main() {
+  %mainObj = call i8* @Main_new()
+  %t0 = call i8* @Main_main(i8* %mainObj)
+  ret i32 0
+}

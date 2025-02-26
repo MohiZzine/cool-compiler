@@ -8,12 +8,16 @@ import (
 
 func BuildSymbolTable(program *ast.Program) *SymbolTable {
 	globalTable := NewSymbolTable(nil) // Root symbol table
-
+    AddBasicClasses(globalTable)
 	fmt.Println("[DEBUG] Constructing Symbol Table...")
 
 	// First pass: Register class names
 	for _, class := range program.Classes {
 		fmt.Printf("[DEBUG] Registering class: %s\n", class.Name)
+		switch class.Name {
+        case "Object", "IO", "Int", "String", "Bool":
+            fmt.Printf("[ERROR] Redefinition of basic class %s\n", class.Name)
+        }
 
 		// Create a new scope for the class
 		classScope := globalTable.NewScope()
@@ -46,6 +50,11 @@ func BuildSymbolTable(program *ast.Program) *SymbolTable {
 
 		// Register attributes
 		for _, attr := range class.Attributes {
+			if attr.Name == "self" {
+				fmt.Printf("[ERROR] Attribute name 'self' is reserved in class %s\n", class.Name)
+				continue
+			}
+
 			fmt.Printf("[DEBUG] Adding attribute: %s of type %s in class %s\n",
 				attr.Name, attr.Type, class.Name)
 
@@ -66,7 +75,7 @@ func BuildSymbolTable(program *ast.Program) *SymbolTable {
 			fmt.Printf("[DEBUG] Registering method: %s in class %s\n", method.Name, class.Name)
 
 			methodScope := classScope.NewScope() // New scope for method
-
+			methodScope.AddEntry("self", SymbolEntry{Type: class.Name})
 			// Ensure method overriding is valid
 			if parentMethod, found := classScope.GetEntry(method.Name); found {
 				if parentMethod.Type != method.ReturnType {
@@ -84,6 +93,11 @@ func BuildSymbolTable(program *ast.Program) *SymbolTable {
 
 			// Register method parameters inside method scope
 			for _, param := range method.Parameters {
+				if param.Name == "self" {
+					fmt.Printf("[ERROR] Parameter name 'self' is reserved in method %s\n", method.Name)
+					continue
+				}
+
 				fmt.Printf("[DEBUG] Adding parameter: %s of type %s in method %s\n",
 					param.Name, param.Type, method.Name)
 
@@ -200,12 +214,16 @@ func (sa *SemanticAnalyzer) Analyze(program *ast.Program) error {
 
 	// 3. Type-check each method body in each class.
 	for _, class := range program.Classes {
+		if class.Name == "Object" || class.Name == "IO" || class.Name == "Int" || class.Name == "String" || class.Name == "Bool" {
+			continue //Skip basic classes
+		}
 		for _, method := range class.Methods {
 			if err := typeCheckMethod(class, &method, sa.symbolTable); err != nil {
 				return fmt.Errorf("in class %s, method %s: %v", class.Name, method.Name, err)
 			}
 		}
 	}
+
 
 	return nil
 }
@@ -277,6 +295,10 @@ func checkMainClassAndMethod(program *ast.Program, st *SymbolTable) error {
 
 // typeConforms checks whether childType conforms to parentType based on the inheritance chain.
 func typeConforms(childType, parentType string, st *SymbolTable) bool {
+	fmt.Printf("[DEBUG] Checking type conformance: %s <: %s\n", childType, parentType)
+	if parentType == "SELF_TYPE" {
+		return true
+	}
 	if childType == parentType {
 		return true
 	}
@@ -337,6 +359,10 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 		return entry.Type, nil
 	case *ast.AssignExpr:
 		// The left-hand side should be a variable.
+		if e.Name == "self" {
+			return "", fmt.Errorf("cannot assign to 'self'")
+		}
+
 		varType, err := typeCheckExpr(&ast.VarExpr{Name: e.Name}, scope, st, currentClass)
 		if err != nil {
 			return "", err

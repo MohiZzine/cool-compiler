@@ -259,21 +259,11 @@ func (l *Lexer) NextToken() Token {
 		tok.Type = MINUS
 		tok.Literal = "-"
 		l.readChar()
-	// This could be a comment or a divide
-	// TODO: add support for Multi line comment
-	case l.char == '/':
-		if l.peekChar() == '/' {
-			// This is a single line comment
-			for l.char != '\n' && l.char != 0 {
-				l.readChar()
-			}
-			return l.NextToken() // Skip the comment and get the next token
-		} else {
-			tok.Type = DIVIDE
-			tok.Literal = "/"
-			l.readChar()
-		}
 
+	case l.char == '/':
+		tok.Type = DIVIDE
+		tok.Literal = "/"
+		l.readChar()
 	case l.char == '~':
 		tok.Type = NEG
 		tok.Literal = "~"

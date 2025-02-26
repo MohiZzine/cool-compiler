@@ -46,6 +46,7 @@ func (p *Parser) error(msg string) {
 // <program> ::= <class-list>
 func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
+	program.Classes = append(program.Classes, InjectBasicClasses()...)
 
 	// parse each class until EOF or no more 'class' tokens
 	for p.curToken.Type == lexer.CLASS {
@@ -75,6 +76,12 @@ func (p *Parser) parseClass() *ast.ClassDecl {
 		p.nextToken() // consume 'inherits'
 		parentName = p.curToken.Literal
 		p.nextToken()
+	} else {
+		parentName = "Object"
+	}
+
+	if parentName == "Int" || parentName == "String" || parentName == "Bool" {
+		p.error("Cannot inherit from " + parentName)
 	}
 
 	// Expect '{'
