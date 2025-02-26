@@ -11,7 +11,7 @@ import (
 type ExprResult struct {
     reg     string // e.g. %t1
     llvmTy  string // e.g. i32 or i8*
-    coolTy  string // e.g. "Int", "ktest", etc.
+    coolTy  string // e.g. "Int", "Bool", etc.
 }
 
 // IRGenerator generates LLVM IR for COOL.
@@ -23,8 +23,9 @@ type IRGenerator struct {
     methodSignatures map[string]MethodSig          // maps "Class_Method" to its signature
 
     // vars maps variable names -> VarInfo. This includes let-bindings, parameters, etc.
-    vars         map[string]VarInfo
-    currentClass string // current class name for SELF_TYPE resolution
+    vars            map[string]VarInfo
+    currentClass    string // current class name for SELF_TYPE resolution
+    attributes      map[string]int // Attribute offsets per class
 }
 
 // VarInfo tracks the declared storage (ptrReg), plus its LLVM type and COOL type
@@ -45,6 +46,7 @@ func NewIRGenerator() *IRGenerator {
         strings:          make(map[string]string),
         methodSignatures: make(map[string]MethodSig),
         vars:             make(map[string]VarInfo),
+        attributes:       make(map[string]int),
     }
 }
 
@@ -79,7 +81,6 @@ func (gen *IRGenerator) newStringConstant(val string) string {
     return name
 }
 
-// llvmType maps a COOL type to an LLVM type.
 func (gen *IRGenerator) llvmType(t string) string {
     switch t {
     case "Int", "Bool":
@@ -87,7 +88,7 @@ func (gen *IRGenerator) llvmType(t string) string {
     case "String":
         return "i8*"
     default:
-        // For SELF_TYPE and user classes, use i8*.
+        // User classes uses object pointers
         return "i8*"
     }
 }
@@ -103,8 +104,8 @@ func (gen *IRGenerator) Generate(program *ast.Program) string {
             cls.Name == "Int" || cls.Name == "String" || cls.Name == "Bool" {
             continue
         }
-        gen.genClass(&cls)
         gen.genNewFunction(&cls)
+        gen.genClass(&cls)
     }
 
     // Ensure that the global constant for "Object" is defined.
@@ -159,7 +160,7 @@ define i8* @Object_abort(i8* %self) {
 }
 
 define i8* @Object_type_name(i8* %self) {
-  ret i8* @.str1
+  ret i8* @.str0
 }
 
 define i8* @Object_copy(i8* %self) {
@@ -256,13 +257,25 @@ func (gen *IRGenerator) genNewFunction(class *ast.ClassDecl) {
         return
     }
     numAttrs := len(class.Attributes)
-    size := (numAttrs + 1) * 8
+    size := (numAttrs + 1) * 8 // Each attribute is 8 bytes, including the class tag
     gen.emit(fmt.Sprintf("define i8* @%s_new() {", class.Name))
     gen.emit(fmt.Sprintf("  %%size = add i32 %d, 0", size))
     gen.emit("  %ptr = call i8* @malloc(i32 %size)")
+
+    // Initialize all attributes to 0
+    for i, attr := range class.Attributes {
+        offset := i * 8 // Assuming each attribute is 8 bytes
+        fmt.Printf("[DEBUG] %s.%s at offset %d\n", class.Name, attr.Name, offset)
+        fmt.Print(gen.attributes)
+        gen.attributes[fmt.Sprintf("%s.%s", class.Name, attr.Name)] = offset
+
+        fieldPtr := gen.newTemp()
+        gen.emit(fmt.Sprintf("  %s = getelementptr i8, i8* %%ptr, i32 %d", fieldPtr, offset))
+        gen.emit(fmt.Sprintf("  store i32 0, i32* %s", fieldPtr)) // Default to 0
+    }
+
     gen.emit("  ret i8* %ptr")
     gen.emit("}")
-    gen.emit("")
 }
 
 func (gen *IRGenerator) genMethod(className string, method *ast.Method) {
@@ -364,37 +377,60 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
             tmp, length, length, gl))
         return ExprResult{reg: tmp, llvmTy: "i8*", coolTy: "String"}
     case *ast.VarExpr:
+        // 1. First, check if it's a local variable (let-binding, parameter, etc.)
         if info, ok := gen.vars[e.Name]; ok {
             loadReg := gen.newTemp()
             gen.emit(fmt.Sprintf("  %s = load %s, %s* %s",
                 loadReg, info.llvmType, info.llvmType, info.ptrReg))
-            return ExprResult{
-                reg:    loadReg,
-                llvmTy: info.llvmType,
-                coolTy: info.coolType,
-            }
+            return ExprResult{reg: loadReg, llvmTy: info.llvmType, coolTy: info.coolType}
         }
-        // Fallback: allocate a default integer variable
+    
+        // 2. Otherwise, check if it's an object attribute (field)
+        attrKey := fmt.Sprintf("%s.%s", gen.currentClass, e.Name)
+        if offset, ok := gen.attributes[attrKey]; ok {
+            fieldPtr := gen.newTemp()
+            loadReg := gen.newTemp()
+            gen.emit(fmt.Sprintf("  %s = getelementptr i8, i8* %%self, i32 %d", fieldPtr, offset))
+            gen.emit(fmt.Sprintf("  %s = load i32, i32* %s", loadReg, fieldPtr))
+            return ExprResult{reg: loadReg, llvmTy: "i32", coolTy: "Int"}
+        }
+    
+        // 3. If the variable is undeclared, allocate memory for it (fallback)
         ptr := gen.newTemp()
         gen.emit(fmt.Sprintf("  %s = alloca i32", ptr))
-        gen.emit(fmt.Sprintf("  store i32 0, i32* %s", ptr))
+        gen.emit(fmt.Sprintf("  store i32 0, i32* %s", ptr)) // Default to 0
         loadReg := gen.newTemp()
-       	gen.emit(fmt.Sprintf("  %s = load i32, i32* %s", loadReg, ptr))
+        gen.emit(fmt.Sprintf("  %s = load i32, i32* %s", loadReg, ptr))
         gen.vars[e.Name] = VarInfo{ptrReg: ptr, llvmType: "i32", coolType: "Int"}
         return ExprResult{reg: loadReg, llvmTy: "i32", coolTy: "Int"}
+    
     case *ast.AssignExpr:
         rhs := gen.genExprEx(e.Value)
-       	info, exists := gen.vars[e.Name]
-        if !exists {
-           	newPtr := gen.newTemp()
-           	gen.emit(fmt.Sprintf("  %s = alloca i32", newPtr))
-           	info = VarInfo{ptrReg: newPtr, llvmType: "i32", coolType: "Int"}
-           	gen.vars[e.Name] = info
+    
+        // Check if assigning to an object attribute
+        attrKey := fmt.Sprintf("%s.%s", gen.currentClass, e.Name)
+        fmt.Println(attrKey, gen.attributes)
+        if offset, ok := gen.attributes[attrKey]; ok {
+            fieldPtr := gen.newTemp()
+            gen.emit(fmt.Sprintf("  %s = getelementptr i8, i8* %%self, i32 %d", fieldPtr, offset))
+            gen.emit(fmt.Sprintf("  store i32 %s, i32* %s", rhs.reg, fieldPtr))
+            return rhs
         }
+    
+        // Otherwise, treat it as a local variable
+        info, exists := gen.vars[e.Name]
+        if !exists {
+            newPtr := gen.newTemp()
+            gen.emit(fmt.Sprintf("  %s = alloca i32", newPtr))
+            info = VarInfo{ptrReg: newPtr, llvmType: "i32", coolType: "Int"}
+            gen.vars[e.Name] = info
+        }
+    
         fixed := castResultIfNeeded(rhs, info.llvmType, gen)
-       	gen.emit(fmt.Sprintf("  store %s %s, %s* %s",
+        gen.emit(fmt.Sprintf("  store %s %s, %s* %s",
             info.llvmType, fixed.reg, info.llvmType, info.ptrReg))
-        return ExprResult{reg: fixed.reg, llvmTy: info.llvmType, coolTy: info.coolType}
+        return fixed
+    
     case *ast.NewExpr:
        	className := e.Type
         if className == "SELF_TYPE" {
@@ -454,37 +490,56 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
            	}
        	}
        	return ExprResult{reg: callReg, llvmTy: sig.ReturnType, coolTy: retCool}
+
     case *ast.IfExpr:
+        uniqueID := gen.newTemp()[1:]
+        thenLabel := "if_then_" + uniqueID
+        elseLabel := "if_else_" + uniqueID
+        endLabel := "if_end_" + uniqueID
+    
+        // Allocate storage for the result at the start of the function
+        resultPtr := gen.newTemp()
+        gen.emit(fmt.Sprintf("  %s = alloca i32", resultPtr))
+    
+        // Evaluate the condition
         cond := gen.genExprEx(e.Condition)
         condCasted := castResultIfNeeded(cond, "i32", gen)
-       	condI1 := gen.newTemp()
-       	gen.emit(fmt.Sprintf("  %s = icmp ne i32 %s, 0", condI1, condCasted.reg))
-       	thenLabel := gen.newTemp()[1:]
-       	elseLabel := gen.newTemp()[1:]
-       	endLabel := gen.newTemp()[1:]
-       	gen.emit(fmt.Sprintf("  br i1 %s, label %%%s, label %%%s", condI1, thenLabel, elseLabel))
-       
-       	gen.emit(fmt.Sprintf("%s:", thenLabel))
-       	tRes := gen.genExprEx(e.ThenBranch)
-       	gen.emit(fmt.Sprintf("  br label %%%s", endLabel))
-       
-       	gen.emit(fmt.Sprintf("%s:", elseLabel))
-       	eRes := gen.genExprEx(e.ElseBranch)
-       	gen.emit(fmt.Sprintf("  br label %%%s", endLabel))
-       
-       	gen.emit(fmt.Sprintf("%s:", endLabel))
-       	uniTy := unifyLLVMTypes(tRes.llvmTy, eRes.llvmTy)
-       	uniCool := unifyCoolTypes(tRes.coolTy, eRes.coolTy)
-       
-       	tCast := castResultIfNeeded(tRes, uniTy, gen)
-       	eCast := castResultIfNeeded(eRes, uniTy, gen)
-       
-       	phi := gen.newTemp()
-       	gen.emit(fmt.Sprintf("  %s = phi %s [%s, %%%s], [%s, %%%s]",
-            phi, uniTy, tCast.reg, thenLabel, eCast.reg, elseLabel))
-       
-       	return ExprResult{reg: phi, llvmTy: uniTy, coolTy: uniCool}
-    case *ast.LetExpr:
+    
+        // Convert condition to boolean i1
+        condI1 := gen.newTemp()
+        gen.emit(fmt.Sprintf("  %s = icmp ne i32 %s, 0", condI1, condCasted.reg))
+    
+        // Conditional branch
+        gen.emit(fmt.Sprintf("  br i1 %s, label %%%s, label %%%s", condI1, thenLabel, elseLabel))
+    
+        // THEN BLOCK
+        gen.emit(fmt.Sprintf("%s:", thenLabel))
+        tRes := gen.genExprEx(e.ThenBranch)
+        tCast := castResultIfNeeded(tRes, "i32", gen)
+        gen.emit(fmt.Sprintf("  store i32 %s, i32* %s", tCast.reg, resultPtr))
+        gen.emit(fmt.Sprintf("  br label %%%s", endLabel))
+    
+        // ELSE BLOCK
+        if e.ElseBranch != nil {
+            gen.emit(fmt.Sprintf("%s:", elseLabel))
+            eRes := gen.genExprEx(e.ElseBranch)
+            eCast := castResultIfNeeded(eRes, "i32", gen)
+            gen.emit(fmt.Sprintf("  store i32 %s, i32* %s", eCast.reg, resultPtr))
+            gen.emit(fmt.Sprintf("  br label %%%s", endLabel))
+        } else {
+            gen.emit(fmt.Sprintf("  br label %%%s", endLabel))
+        }
+    
+        // END BLOCK
+        gen.emit(fmt.Sprintf("%s:", endLabel))
+    
+        // Load the final result
+        finalResult := gen.newTemp()
+        gen.emit(fmt.Sprintf("  %s = load i32, i32* %s", finalResult, resultPtr))
+    
+        return ExprResult{reg: finalResult, llvmTy: "i32", coolTy: "Int"}
+    
+	case *ast.LetExpr:
         oldVars := gen.vars
        	// Create a fresh scope (shallow copy)
        	newVars := make(map[string]VarInfo)

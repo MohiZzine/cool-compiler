@@ -55,6 +55,16 @@ func main() {
 		log.Fatalf("Error processing comments: %v", err)
 	}
 
+	// Save the cleaned source to out/cleaned_source.cl.
+	cleanedSourcePath := filepath.Join("out", "cleaned_source.cl")
+	cleanedSourceFile, err := os.Create(cleanedSourcePath)
+	if err != nil {
+		log.Fatalf("Error creating file: %v", err)
+	}
+	defer cleanedSourceFile.Close()
+
+	_, err = cleanedSourceFile.WriteString(cleanSource)
+
 	// Create a new lexer using the cleaned source.
 	lex := lexer.NewLexer(stringReader(cleanSource))
 

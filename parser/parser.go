@@ -699,7 +699,7 @@ func (p *Parser) parseCase() ast.Expr {
 // parseBranchList => multiple branches <object-id> : <type> => <expr> ;
 func (p *Parser) parseBranchList() []ast.CaseBranch {
 	var bs []ast.CaseBranch
-	for p.curToken.Type == lexer.OBJECTID {
+	for p.curToken.Type == lexer.OBJECTID || p.curToken.Type == lexer.INT_CONST || p.curToken.Type == lexer.STR_CONST ||p.curToken.Type == lexer.BOOL_CONST {
 		varName := p.curToken.Literal
 		p.nextToken()
 

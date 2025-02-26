@@ -1,24 +1,22 @@
-(* ComplexExample.cl
-   A complex COOL program that demonstrates various computations.
-*)
+
 
 class Calculator {
-    (* Compute factorial recursively. *)
+    
     factorial(n: Int): Int {
         if n < 2 then 1 else n * self.factorial(n - 1) fi;
     };
 
-    (* Compute Fibonacci numbers recursively. *)
+    
     fib(n: Int): Int {
         if n < 2 then n else self.fib(n - 1) + self.fib(n - 2) fi;
     };
 
-    (* Compute exponentiation recursively. *)
+    
     power(base: Int, exp: Int): Int {
         if exp = 0 then 1 else base * self.power(base, exp - 1) fi;
     };
 
-    (* Compute greatest common divisor using the subtraction method. *)
+    
     gcd(a: Int, b: Int): Int {
         if a = b then a else
             if a < b then self.gcd(a, b - a)
@@ -26,7 +24,7 @@ class Calculator {
         fi;
     };
 
-    (* Compute the sum of all integers from start to end using a loop. *)
+    
     sum_range(start: Int, end: Int): Int {
         let result: Int <- 0, i: Int <- start in {
             while i <= end loop ({
@@ -37,18 +35,18 @@ class Calculator {
         };
     };
 
-    (* Select an operation based on an integer code using if-else. *)
+    
     selectOperation(op: Int, a: Int, b: Int): Int {
         if op = 0 then a + b 
         else if op = 1 then a - b 
         else if op = 2 then a * b 
         else if op = 3 then (if b = 0 then 0 else a / b fi) 
-        else 0  (* Default case if `op` is invalid *)
+        else 0  
         fi fi fi fi
     };
 
 
-    (* Compute a complex mathematical expression. *)
+    
     computeExpression(x: Int, y: Int): Int {
         let a: Int <- self.factorial(x) in {
             let b: Int <- self.fib(y) in {
@@ -89,11 +87,11 @@ class Main inherits IO {
             self.out_string("\n");
 
             self.out_string("Select operation (addition) on 7 and 3: ");
-            self.out_int(calc.selectOperation(0, 7, 3));  (* 0 indicates addition *)
+            self.out_int(calc.selectOperation(0, 7, 3));  
             self.out_string("\n");
 
             self.out_string("Select operation (substraction) on 7 and 3: ");
-            self.out_int(calc.selectOperation(1, 7, 3));  (* 1 indicates subs *)
+            self.out_int(calc.selectOperation(1, 7, 3));  
             self.out_string("\n");
 
             self.out_string("Complex computation with x = 4 and y = 5: ");

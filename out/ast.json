@@ -138,45 +138,581 @@
       "Methods": null
     },
     {
-      "Name": "ktest",
+      "Name": "Calculator",
       "Parent": "Object",
-      "Attributes": [
-        {
-          "Name": "k",
-          "Type": "Int",
-          "InitValue": null
-        }
-      ],
+      "Attributes": [],
       "Methods": [
         {
-          "Name": "getK",
-          "Parameters": null,
-          "ReturnType": "Int",
-          "Body": {
-            "Name": "k"
-          }
-        },
-        {
-          "Name": "setK",
+          "Name": "factorial",
           "Parameters": [
             {
-              "Name": "new_k",
+              "Name": "n",
               "Type": "Int"
             }
           ],
-          "ReturnType": "SELF_TYPE",
+          "ReturnType": "Int",
           "Body": {
-            "Expressions": [
+            "Condition": {
+              "Left": {
+                "Name": "n"
+              },
+              "Operator": "\u003c",
+              "Right": {
+                "Value": 2
+              }
+            },
+            "ThenBranch": {
+              "Value": 1
+            },
+            "ElseBranch": {
+              "Left": {
+                "Name": "n"
+              },
+              "Operator": "*",
+              "Right": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "factorial",
+                "Arguments": [
+                  {
+                    "Left": {
+                      "Name": "n"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Name": "fib",
+          "Parameters": [
+            {
+              "Name": "n",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Condition": {
+              "Left": {
+                "Name": "n"
+              },
+              "Operator": "\u003c",
+              "Right": {
+                "Value": 2
+              }
+            },
+            "ThenBranch": {
+              "Name": "n"
+            },
+            "ElseBranch": {
+              "Left": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "fib",
+                "Arguments": [
+                  {
+                    "Left": {
+                      "Name": "n"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Value": 1
+                    }
+                  }
+                ]
+              },
+              "Operator": "+",
+              "Right": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "fib",
+                "Arguments": [
+                  {
+                    "Left": {
+                      "Name": "n"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Value": 2
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Name": "power",
+          "Parameters": [
+            {
+              "Name": "base",
+              "Type": "Int"
+            },
+            {
+              "Name": "exp",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Condition": {
+              "Left": {
+                "Name": "exp"
+              },
+              "Operator": "=",
+              "Right": {
+                "Value": 0
+              }
+            },
+            "ThenBranch": {
+              "Value": 1
+            },
+            "ElseBranch": {
+              "Left": {
+                "Name": "base"
+              },
+              "Operator": "*",
+              "Right": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "power",
+                "Arguments": [
+                  {
+                    "Name": "base"
+                  },
+                  {
+                    "Left": {
+                      "Name": "exp"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Name": "gcd",
+          "Parameters": [
+            {
+              "Name": "a",
+              "Type": "Int"
+            },
+            {
+              "Name": "b",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Condition": {
+              "Left": {
+                "Name": "a"
+              },
+              "Operator": "=",
+              "Right": {
+                "Name": "b"
+              }
+            },
+            "ThenBranch": {
+              "Name": "a"
+            },
+            "ElseBranch": {
+              "Condition": {
+                "Left": {
+                  "Name": "a"
+                },
+                "Operator": "\u003c",
+                "Right": {
+                  "Name": "b"
+                }
+              },
+              "ThenBranch": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "gcd",
+                "Arguments": [
+                  {
+                    "Name": "a"
+                  },
+                  {
+                    "Left": {
+                      "Name": "b"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Name": "a"
+                    }
+                  }
+                ]
+              },
+              "ElseBranch": {
+                "Caller": {
+                  "Name": "self"
+                },
+                "Method": "gcd",
+                "Arguments": [
+                  {
+                    "Left": {
+                      "Name": "a"
+                    },
+                    "Operator": "-",
+                    "Right": {
+                      "Name": "b"
+                    }
+                  },
+                  {
+                    "Name": "b"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "Name": "sum_range",
+          "Parameters": [
+            {
+              "Name": "start",
+              "Type": "Int"
+            },
+            {
+              "Name": "end",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Variables": [
               {
-                "Name": "k",
-                "Value": {
-                  "Name": "new_k"
+                "Name": "result",
+                "Type": "Int",
+                "InitValue": {
+                  "Value": 0
                 }
               },
               {
-                "Name": "self"
+                "Name": "i",
+                "Type": "Int",
+                "InitValue": {
+                  "Name": "start"
+                }
               }
-            ]
+            ],
+            "Body": {
+              "Expressions": [
+                {
+                  "Condition": {
+                    "Left": {
+                      "Name": "i"
+                    },
+                    "Operator": "\u003c=",
+                    "Right": {
+                      "Name": "end"
+                    }
+                  },
+                  "Body": {
+                    "Expressions": [
+                      {
+                        "Name": "result",
+                        "Value": {
+                          "Left": {
+                            "Name": "result"
+                          },
+                          "Operator": "+",
+                          "Right": {
+                            "Name": "i"
+                          }
+                        }
+                      },
+                      {
+                        "Name": "i",
+                        "Value": {
+                          "Left": {
+                            "Name": "i"
+                          },
+                          "Operator": "+",
+                          "Right": {
+                            "Value": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Name": "result"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Name": "selectOperation",
+          "Parameters": [
+            {
+              "Name": "op",
+              "Type": "Int"
+            },
+            {
+              "Name": "a",
+              "Type": "Int"
+            },
+            {
+              "Name": "b",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Condition": {
+              "Left": {
+                "Name": "op"
+              },
+              "Operator": "=",
+              "Right": {
+                "Value": 0
+              }
+            },
+            "ThenBranch": {
+              "Left": {
+                "Name": "a"
+              },
+              "Operator": "+",
+              "Right": {
+                "Name": "b"
+              }
+            },
+            "ElseBranch": {
+              "Condition": {
+                "Left": {
+                  "Name": "op"
+                },
+                "Operator": "=",
+                "Right": {
+                  "Value": 1
+                }
+              },
+              "ThenBranch": {
+                "Left": {
+                  "Name": "a"
+                },
+                "Operator": "-",
+                "Right": {
+                  "Name": "b"
+                }
+              },
+              "ElseBranch": {
+                "Condition": {
+                  "Left": {
+                    "Name": "op"
+                  },
+                  "Operator": "=",
+                  "Right": {
+                    "Value": 2
+                  }
+                },
+                "ThenBranch": {
+                  "Left": {
+                    "Name": "a"
+                  },
+                  "Operator": "*",
+                  "Right": {
+                    "Name": "b"
+                  }
+                },
+                "ElseBranch": {
+                  "Condition": {
+                    "Left": {
+                      "Name": "op"
+                    },
+                    "Operator": "=",
+                    "Right": {
+                      "Value": 3
+                    }
+                  },
+                  "ThenBranch": {
+                    "Condition": {
+                      "Left": {
+                        "Name": "b"
+                      },
+                      "Operator": "=",
+                      "Right": {
+                        "Value": 0
+                      }
+                    },
+                    "ThenBranch": {
+                      "Value": 0
+                    },
+                    "ElseBranch": {
+                      "Left": {
+                        "Name": "a"
+                      },
+                      "Operator": "/",
+                      "Right": {
+                        "Name": "b"
+                      }
+                    }
+                  },
+                  "ElseBranch": {
+                    "Value": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Name": "computeExpression",
+          "Parameters": [
+            {
+              "Name": "x",
+              "Type": "Int"
+            },
+            {
+              "Name": "y",
+              "Type": "Int"
+            }
+          ],
+          "ReturnType": "Int",
+          "Body": {
+            "Variables": [
+              {
+                "Name": "a",
+                "Type": "Int",
+                "InitValue": {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "factorial",
+                  "Arguments": [
+                    {
+                      "Name": "x"
+                    }
+                  ]
+                }
+              }
+            ],
+            "Body": {
+              "Expressions": [
+                {
+                  "Variables": [
+                    {
+                      "Name": "b",
+                      "Type": "Int",
+                      "InitValue": {
+                        "Caller": {
+                          "Name": "self"
+                        },
+                        "Method": "fib",
+                        "Arguments": [
+                          {
+                            "Name": "y"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "Body": {
+                    "Expressions": [
+                      {
+                        "Variables": [
+                          {
+                            "Name": "c",
+                            "Type": "Int",
+                            "InitValue": {
+                              "Caller": {
+                                "Name": "self"
+                              },
+                              "Method": "power",
+                              "Arguments": [
+                                {
+                                  "Name": "x"
+                                },
+                                {
+                                  "Name": "y"
+                                }
+                              ]
+                            }
+                          }
+                        ],
+                        "Body": {
+                          "Expressions": [
+                            {
+                              "Variables": [
+                                {
+                                  "Name": "d",
+                                  "Type": "Int",
+                                  "InitValue": {
+                                    "Caller": {
+                                      "Name": "self"
+                                    },
+                                    "Method": "gcd",
+                                    "Arguments": [
+                                      {
+                                        "Name": "a"
+                                      },
+                                      {
+                                        "Left": {
+                                          "Name": "b"
+                                        },
+                                        "Operator": "+",
+                                        "Right": {
+                                          "Value": 1
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "Body": {
+                                "Expressions": [
+                                  {
+                                    "Left": {
+                                      "Left": {
+                                        "Name": "a"
+                                      },
+                                      "Operator": "+",
+                                      "Right": {
+                                        "Left": {
+                                          "Name": "b"
+                                        },
+                                        "Operator": "*",
+                                        "Right": {
+                                          "Name": "c"
+                                        }
+                                      }
+                                    },
+                                    "Operator": "-",
+                                    "Right": {
+                                      "Name": "d"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
           }
         }
       ]
@@ -189,37 +725,373 @@
         {
           "Name": "main",
           "Parameters": null,
-          "ReturnType": "Object",
+          "ReturnType": "SELF_TYPE",
           "Body": {
             "Variables": [
               {
-                "Name": "d1",
-                "Type": "ktest",
+                "Name": "calc",
+                "Type": "Calculator",
                 "InitValue": {
-                  "Caller": {
-                    "Type": "ktest"
-                  },
-                  "Method": "setK",
-                  "Arguments": [
-                    {
-                      "Value": 2
-                    }
-                  ]
+                  "Type": "Calculator"
                 }
               }
             ],
             "Body": {
-              "Caller": {
-                "Name": "self"
-              },
-              "Method": "out_int",
-              "Arguments": [
+              "Expressions": [
                 {
                   "Caller": {
-                    "Name": "d1"
+                    "Name": "self"
                   },
-                  "Method": "getK",
-                  "Arguments": null
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Factorial of 5: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "factorial",
+                      "Arguments": [
+                        {
+                          "Value": 5
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Fibonacci of 10: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "fib",
+                      "Arguments": [
+                        {
+                          "Value": 10
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "2 raised to 8: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "power",
+                      "Arguments": [
+                        {
+                          "Value": 2
+                        },
+                        {
+                          "Value": 8
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "GCD of 54 and 24: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "gcd",
+                      "Arguments": [
+                        {
+                          "Value": 54
+                        },
+                        {
+                          "Value": 24
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Sum of numbers from 1 to 10: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "sum_range",
+                      "Arguments": [
+                        {
+                          "Value": 1
+                        },
+                        {
+                          "Value": 10
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Select operation (addition) on 7 and 3: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "selectOperation",
+                      "Arguments": [
+                        {
+                          "Value": 0
+                        },
+                        {
+                          "Value": 7
+                        },
+                        {
+                          "Value": 3
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Select operation (substraction) on 7 and 3: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "selectOperation",
+                      "Arguments": [
+                        {
+                          "Value": 1
+                        },
+                        {
+                          "Value": 7
+                        },
+                        {
+                          "Value": 3
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "Complex computation with x = 4 and y = 5: "
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_int",
+                  "Arguments": [
+                    {
+                      "Caller": {
+                        "Name": "calc"
+                      },
+                      "Method": "computeExpression",
+                      "Arguments": [
+                        {
+                          "Value": 4
+                        },
+                        {
+                          "Value": 5
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Caller": {
+                    "Name": "self"
+                  },
+                  "Method": "out_string",
+                  "Arguments": [
+                    {
+                      "Value": "\n"
+                    }
+                  ]
+                },
+                {
+                  "Name": "self"
                 }
               ]
             }
