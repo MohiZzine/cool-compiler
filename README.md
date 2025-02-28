@@ -1,7 +1,3 @@
-Below is the revised merged README with the "Two‑Phase Method Generation", "Extensions & Future Work", and "Contributing" sections removed:
-
----
-
 # COOL Compiler Project
 
 Welcome to the COOL Compiler Project – an implementation of a complete compiler for the Classroom Object-Oriented Language (COOL). This project was developed as a final project for the Compilers course (CI2 2024/2025) and is implemented in Go. It supports all core phases of compilation—from lexical analysis through to LLVM IR generation, optimization, and binary generation.
