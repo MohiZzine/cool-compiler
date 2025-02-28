@@ -2,21 +2,21 @@ package lexer
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
 	"unicode"
+	"errors"
+	"cool-compiler/utils"
+	"cool-compiler/structures"
 )
 
-type TokenType int
+// TokenType represents the type of a lexical token.
 
-// The list of token types
 const (
-	EOF TokenType = iota
+	EOF structures.TokenType = iota
 	ERROR
 
-	// Keywords
 	CLASS
 	INHERITS
 	ISVOID
@@ -35,80 +35,78 @@ const (
 	OF
 	NOT
 
-	// Data types
 	STR_CONST
 	BOOL_CONST
 	INT_CONST
 
-	// Identifiers
 	TYPEID
 	OBJECTID
 
-	// Operators
-	ASSIGN // <-
-	DARROW // =>
-	LT     // <
-	LE     // <=
-	EQ     // =
-	GT     // >
-	GE     // >=
-	PLUS   // +
-	MINUS  // -
-	TIMES  // *
-	DIVIDE // /
-	LPAREN // (
-	RPAREN // )
-	LBRACE // {
-	RBRACE // }
-	SEMI   // ;
-	COLON  // :
-	COMMA  // ,
-	DOT    // .
-	AT     // @
-	NEG    // ~
+	ASSIGN   // <-
+	DARROW   // =>
+	LT       // <
+	LE       // <=
+	EQ       // =
+	GT       // >
+	GE       // >=
+	PLUS     // +
+	MINUS    // -
+	TIMES    // *
+	DIVIDE   // /
+	LPAREN   // (
+	RPAREN   // )
+	LBRACE   // {
+	RBRACE   // }
+	SEMI     // ;
+	COLON    // :
+	COMMA    // ,
+	DOT      // .
+	AT       // @
+	NEG      // ~
 )
 
-func (tt TokenType) String() string {
-	return [...]string{"EOF", "ERROR", "CLASS", "INHERITS", "ISVOID", "IF", "ELSE", "FI", "THEN", "LET", "IN", "WHILE", "CASE", "ESAC", "LOOP", "POOL",
-		"NEW", "OF", "NOT", "STR_CONST", "BOOL_CONST", "INT_CONST", "TYPEID", "OBJECTID", "ASSIGN", "DARROW", "LT", "LE", "EQ", "GT", "GE", "PLUS", "MINUS", "TIMES",
-		"DIVIDE", "LPAREN", "RPAREN", "LBRACE", "RBRACE", "SEMI", "COLON", "COMMA", "DOT", "AT", "NEG"}[tt]
-}
 
-// Token represents a lexical token with its type, value, and position.
-type Token struct {
-	Type    TokenType
-	Literal string
-	Line    int
-	Column  int
-}
-
-// Lexer is the lexical analyzer.
+// Lexer performs lexical analysis on an input stream.
 type Lexer struct {
 	reader *bufio.Reader
 	line   int
 	column int
 	char   rune
+
+	debug *utils.Debug
+	err *utils.Error
 }
 
-// NewLexer creates a new lexer from an io.Reader
-func NewLexer(reader io.Reader) *Lexer {
-	l := &Lexer{
+// NewLexer creates a new Lexer from an io.Reader.
+func NewLexer(reader io.Reader, err *utils.Error, deb *utils.Debug) *Lexer {
+	return &Lexer{
 		reader: bufio.NewReader(reader),
 		line:   1,
 		column: 0,
 		char:   ' ',
+		debug: deb,
+		err: err,
 	}
-	return l
 }
 
-// readChar reads the next character from the input.
+// error logs an error message with line and column information.
+func (l *Lexer) error(msg string) error {
+	l.err.LogLine("[Lexer Error] line " + strconv.Itoa(l.line) + ", column " + strconv.Itoa(l.column) + ": " + msg)
+	return errors.New(msg)
+}
+
+// debug logs a debug message with line and column information.
+func (l *Lexer) debugLogToken(token structures.Token) {
+	l.debug.LogLine("[lEXER DEBUG] Token: Type=" + token.Type.String() + ", Literal=" + token.Literal + ", Line=" + strconv.Itoa(token.Line) + ", Column=" + strconv.Itoa(token.Column))
+}
+
+// readChar reads the next rune from the input.
 func (l *Lexer) readChar() {
 	var err error
 	l.char, _, err = l.reader.ReadRune()
 	if err != nil {
-		l.char = 0 // EOF
+		l.char = 0
 	}
-
 	l.column++
 	if l.char == '\n' {
 		l.line++
@@ -116,7 +114,7 @@ func (l *Lexer) readChar() {
 	}
 }
 
-// peekChar returns the next character without advancing the stream.
+// peekChar returns the next rune without consuming it.
 func (l *Lexer) peekChar() rune {
 	char, _, err := l.reader.ReadRune()
 	if err != nil {
@@ -126,13 +124,14 @@ func (l *Lexer) peekChar() rune {
 	return char
 }
 
-// skipWhiteSpace whitespace characters.
+// skipWhiteSpace advances the lexer past any whitespace.
 func (l *Lexer) skipWhiteSpace() {
 	for unicode.IsSpace(l.char) {
 		l.readChar()
 	}
 }
 
+// readNumber consumes a number and returns it as a string.
 func (l *Lexer) readNumber() string {
 	var sb strings.Builder
 	for unicode.IsDigit(l.char) {
@@ -142,14 +141,17 @@ func (l *Lexer) readNumber() string {
 	return sb.String()
 }
 
+// isIdentifierStart returns true if the rune is a valid identifier start.
 func isIdentifierStart(char rune) bool {
 	return unicode.IsLetter(char) || char == '_'
 }
 
+// isIdentifierPart returns true if the rune is a valid part of an identifier.
 func isIdentifierPart(char rune) bool {
 	return isIdentifierStart(char) || unicode.IsDigit(char)
 }
 
+// readIdentifier consumes an identifier and returns it.
 func (l *Lexer) readIdentifier() string {
 	var sb strings.Builder
 	for isIdentifierPart(l.char) {
@@ -159,17 +161,17 @@ func (l *Lexer) readIdentifier() string {
 	return sb.String()
 }
 
+// readString consumes a string literal and returns its value.
 func (l *Lexer) readString() (string, error) {
 	var sb strings.Builder
-	l.readChar()
+	l.readChar() // consume opening quote
 	for l.char != '"' {
 		if l.char == 0 {
-			return "", fmt.Errorf("EOF in string constant")
+			return "", 	l.error("EOF in string constant")
 		}
 		if l.char == '\n' {
-			return "", fmt.Errorf("Unterminitaed string constant")
+			return "", l.error("Unterminated string constant")
 		}
-
 		if l.char == '\\' {
 			l.readChar()
 			switch l.char {
@@ -193,28 +195,22 @@ func (l *Lexer) readString() (string, error) {
 		} else {
 			sb.WriteRune(l.char)
 		}
-
 		l.readChar()
 	}
-
-	l.readChar()
-	return sb.String(), nil
-}
-
-// Add debugging output to log each token
-func (l *Lexer) debugLogToken(token Token) {
-	fmt.Printf("[DEBUG] Token: Type=%s, Literal=%s, Line=%d, Column=%d\n", token.Type.String(), token.Literal, token.Line, token.Column)
-}
-
-// Update NextToken to include debugging
-func (l *Lexer) NextToken() Token {
-	l.skipWhiteSpace()
-
-	tok := Token{
-		Line:   l.line,
-		Column: l.column,
+	l.readChar() // consume closing quote
+	str := sb.String()
+	if len(str) > 1024 {
+		return "", l.error("string literal exceeds maximum length of 1024 characters")
 	}
+	return str, nil
+}
 
+// NextToken returns the next token from the input.
+func (l *Lexer) NextToken() structures.Token {
+	l.skipWhiteSpace()
+	tok := structures.Token{Line: l.line, Column: l.column}
+	defer l.debugLogToken(tok)
+	
 	switch {
 	case l.char == 0:
 		tok.Type = EOF
@@ -259,7 +255,6 @@ func (l *Lexer) NextToken() Token {
 		tok.Type = MINUS
 		tok.Literal = "-"
 		l.readChar()
-
 	case l.char == '/':
 		tok.Type = DIVIDE
 		tok.Literal = "/"
@@ -283,7 +278,6 @@ func (l *Lexer) NextToken() Token {
 			tok.Literal = "="
 			l.readChar()
 		}
-	// Could be LT, LE, or ASSIGN
 	case l.char == '<':
 		if l.peekChar() == '-' {
 			tok.Type = ASSIGN
@@ -316,6 +310,7 @@ func (l *Lexer) NextToken() Token {
 		if err != nil {
 			tok.Type = ERROR
 			tok.Literal = err.Error()
+			l.error(err.Error())
 		} else {
 			tok.Type = STR_CONST
 			tok.Literal = str
@@ -325,6 +320,7 @@ func (l *Lexer) NextToken() Token {
 		if _, err := strconv.Atoi(num); err != nil {
 			tok.Type = ERROR
 			tok.Literal = "Number out of range"
+			l.error("Number out of range")
 		} else {
 			tok.Type = INT_CONST
 			tok.Literal = num
@@ -333,7 +329,6 @@ func (l *Lexer) NextToken() Token {
 		identifier := l.readIdentifier()
 		tok.Literal = identifier
 		switch strings.ToLower(identifier) {
-		// Handle keywords
 		case "class":
 			tok.Type = CLASS
 		case "if":
@@ -368,26 +363,21 @@ func (l *Lexer) NextToken() Token {
 			tok.Type = NEW
 		case "not":
 			tok.Type = NOT
-		// Handle boolean const
 		case "true", "false":
 			tok.Type = BOOL_CONST
 		default:
 			if unicode.IsUpper(rune(identifier[0])) {
-				// Types are all starting with an upper case.
 				tok.Type = TYPEID
 			} else {
-				// If not a type then its an object.
 				tok.Type = OBJECTID
 			}
 		}
 	default:
 		tok.Type = ERROR
-		tok.Literal = fmt.Sprintf("Unexpected character: %c", l.char)
+		tok.Literal = "Unexpected character: " + string(l.char)
+		l.error(tok.Literal)
 		l.readChar()
 	}
-
-	// Log the token
-	l.debugLogToken(tok)
-
 	return tok
 }
+

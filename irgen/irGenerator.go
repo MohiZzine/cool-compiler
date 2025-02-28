@@ -4,7 +4,8 @@ import (
     "fmt"
     "strings"
 
-    "cool-compiler/ast"
+    "cool-compiler/utils"
+    "cool-compiler/structures"
 )
 
 // ExprResult holds the register, LLVM type, and original COOL type after generating code for an expression.
@@ -26,6 +27,7 @@ type IRGenerator struct {
     vars            map[string]VarInfo
     currentClass    string // current class name for SELF_TYPE resolution
     attributes      map[string]int // Attribute offsets per class
+    classes         map[string]*structures.ClassDecl
 }
 
 // VarInfo tracks the declared storage (ptrReg), plus its LLVM type and COOL type
@@ -47,6 +49,7 @@ func NewIRGenerator() *IRGenerator {
         methodSignatures: make(map[string]MethodSig),
         vars:             make(map[string]VarInfo),
         attributes:       make(map[string]int),
+        classes:          make(map[string]*structures.ClassDecl),
     }
 }
 
@@ -93,19 +96,19 @@ func (gen *IRGenerator) llvmType(t string) string {
     }
 }
 
-func (gen *IRGenerator) Generate(program *ast.Program) string {
+func (gen *IRGenerator) Generate(program *structures.Program) string {
 
-    // 1) Collect method signatures.
+    // Collect method signatures.
     gen.collectMethodSignatures(program)
 
-    // 2) Generate IR for user-defined classes (skip built-in classes).
+    // Generate IR for user-defined classes (skip built-in classes).
     for _, cls := range program.Classes {
         if cls.Name == "Object" || cls.Name == "IO" ||
             cls.Name == "Int" || cls.Name == "String" || cls.Name == "Bool" {
             continue
         }
         gen.genNewFunction(&cls)
-        gen.genClass(&cls)
+        gen.genClass(&cls, program)
     }
 
     // Ensure that the global constant for "Object" is defined.
@@ -114,124 +117,93 @@ func (gen *IRGenerator) Generate(program *ast.Program) string {
     var finalIR strings.Builder
     finalIR.WriteString("; ModuleID = 'cool_module'\n")
 
-    // 3) Print global string constants.
+    // Print global string constants.
     finalIR.WriteString(gen.globals.String())
 
-    // 4) Print user-defined function bodies.
+    // Print user-defined function bodies.
     finalIR.WriteString(gen.sb.String())
 
-    // 5) Append built-in stubs.
-    finalIR.WriteString(gen.basicClassStubs())
+    // Append built-in stubs.
+    finalIR.WriteString(utils.BasicClassStubs())
 
     return finalIR.String()
 }
 
 
-func (gen *IRGenerator) basicClassStubs() string {
-    return `
-    ; Declare external functions
-declare i32 @printf(i8*, ...)
-declare i32 @scanf(i8*, ...)
-declare i8* @malloc(i32)
-declare void @exit(i32)
-
-; String constants
-@.fmt_str = private constant [4 x i8] c"%s\0A\00"
-@.fmt_int = private constant [4 x i8] c"%d\0A\00"
-@.fmt_scan_str = private constant [3 x i8] c"%s\00"
-@.fmt_scan_int = private constant [3 x i8] c"%d\00"
-@.empty_str = private constant [1 x i8] c"\00"
-
-; Global buffer for input storage
-@.input_buffer = global [256 x i8] zeroinitializer
-
-
-; Entry point function
-define i32 @main() {
-  %mainObj = call i8* @Main_new()
-  %t0 = call i8* @Main_main(i8* %mainObj)
-  ret i32 0
+func (gen *IRGenerator) generateTypeNameConstant(className string) string {
+    globalName := fmt.Sprintf("@.%s_name", className)
+    nameLength := len(className) + 1 // +1 for null terminator
+    gen.globals.WriteString(fmt.Sprintf(
+        "%s = private unnamed_addr constant [%d x i8] c\"%s\\00\"\n",
+        globalName, nameLength, className))
+    return globalName
 }
 
-; Object methods
-define i8* @Object_abort(i8* %self) {
-  call void @exit(i32 1)
-  ret i8* %self
+func extractMethodName(fullKey string) string {
+    // e.g. fullKey == "Parent_foo" => returns "foo"
+    parts := strings.SplitN(fullKey, "_", 2)
+    if len(parts) < 2 {
+        return fullKey // fallback
+    }
+    return parts[1]
 }
 
-define i8* @Object_type_name(i8* %self) {
-  ret i8* @.str0
-}
+// gatherAllAttributes returns the attributes from the entire chain:
+// Parent's attributes (and its parent, etc.), then the child's own.
+func (gen *IRGenerator) gatherAllAttributes(className string) []structures.Attribute {
+    // If className is "Object" (or ""), return empty: no parent.
+    if className == "" || className == "Object" {
+        return nil
+    }
+    cls, ok := gen.classes[className]
+    if !ok {
+        return nil
+    }
 
-define i8* @Object_copy(i8* %self) {
-  ret i8* %self
+    // Recursively get parent's attributes
+    parentAttrs := gen.gatherAllAttributes(cls.Parent)
+    // Then add this class's own attributes
+    return append(parentAttrs, cls.Attributes...)
 }
-
-; Output string method
-define i8* @IO_out_string(i8* %self, i8* %x) {
-  %fmt_ptr = getelementptr inbounds [4 x i8], [4 x i8]* @.fmt_str, i32 0, i32 0
-  call i32 (i8*, ...) @printf(i8* %fmt_ptr, i8* %x)
-  ret i8* %self
-}
-
-; Output integer method
-define i8* @IO_out_int(i8* %self, i32 %x) {
-  %fmt_ptr = getelementptr inbounds [4 x i8], [4 x i8]* @.fmt_int, i32 0, i32 0
-  call i32 (i8*, ...) @printf(i8* %fmt_ptr, i32 %x)
-  ret i8* %self
-}
-
-; Input string method (reads from user)
-define i8* @IO_in_string(i8* %self) {
-  %fmt_ptr = getelementptr inbounds [4 x i8], [4 x i8]* @.fmt_scan_str, i32 0, i32 0
-  %buf_ptr = getelementptr inbounds [256 x i8], [256 x i8]* @.input_buffer, i32 0, i32 0
-  call i32 (i8*, ...) @scanf(i8* %fmt_ptr, i8* %buf_ptr)
-  ret i8* %buf_ptr
-}
-
-; Input integer method (reads from user)
-define i32 @IO_in_int(i8* %self) {
-  %fmt_ptr = getelementptr inbounds [3 x i8], [3 x i8]* @.fmt_scan_int, i32 0, i32 0
-  %input = alloca i32
-  call i32 (i8*, ...) @scanf(i8* %fmt_ptr, i32* %input)
-  %result = load i32, i32* %input
-  ret i32 %result
-}
-
-; String methods (stub implementations)
-define i32 @String_length(i8* %self) {
-  ret i32 999
-}
-
-define i8* @String_concat(i8* %self, i8* %s) {
-  ret i8* %self
-}
-
-define i8* @String_substr(i8* %self, i32 %i, i32 %l) {
-  ret i8* %self
-}
-    `
-}
-
 
 
 // collectMethodSignatures gathers method signature info from every class.
-func (gen *IRGenerator) collectMethodSignatures(program *ast.Program) {
+func (gen *IRGenerator) collectMethodSignatures(program *structures.Program) {
+    // Store all classes for easy lookup
+    gen.classes = make(map[string]*structures.ClassDecl)
+    for i := range program.Classes {
+        gen.classes[program.Classes[i].Name] = &program.Classes[i]
+    }
+
     for _, class := range program.Classes {
+        // Get inherited method signatures first
+        inheritedMethods := gen.getInheritedMethodSignatures(class.Parent)
+
+        // Store inherited methods first
+        for parentKey, sig := range inheritedMethods {
+            // "parentKey" might be "Parent_m"
+            // We want "childKey" to be "ClassName_m"
+            methodName := extractMethodName(parentKey) 
+            childKey  := gen.methodKey(class.Name, methodName)
+            gen.methodSignatures[childKey] = sig
+        }
+
+        // Add methods explicitly defined in the class
         for _, method := range class.Methods {
             key := gen.methodKey(class.Name, method.Name)
             isSelf := (method.ReturnType == "SELF_TYPE")
-            var retTy string
-            if isSelf {
-                retTy = "i8*"
-            } else {
+            retTy := "i8*"
+            if !isSelf {
                 retTy = gen.llvmType(method.ReturnType)
             }
+
             var pTys []string
-            pTys = append(pTys, "i8*") // self
+            pTys = append(pTys, "i8*") // 'self' is always first
             for _, param := range method.Parameters {
                 pTys = append(pTys, gen.llvmType(param.Type))
             }
+
+            // If a method is overridden, replace the inherited version
             gen.methodSignatures[key] = MethodSig{
                 ReturnType:   retTy,
                 ParamTypes:   pTys,
@@ -241,44 +213,124 @@ func (gen *IRGenerator) collectMethodSignatures(program *ast.Program) {
     }
 }
 
-func (gen *IRGenerator) genClass(class *ast.ClassDecl) {
+func (gen *IRGenerator) getInheritedMethodSignatures(parentName string) map[string]MethodSig {
+    inheritedMethods := make(map[string]MethodSig)
+
+    if parentName == "" || parentName == "Object" {
+        return inheritedMethods // Base case: Object has no parent
+    }
+
+    // Find parent class
+    parentClass, found := gen.classes[parentName]
+    if !found {
+        return inheritedMethods // If parent class isn't found, return empty map
+    }
+
+    // Recursively inherit from grandparent classes
+    inheritedMethods = gen.getInheritedMethodSignatures(parentClass.Parent)
+
+    // Add parent's methods (without overriding inherited ones)
+    for _, method := range parentClass.Methods {
+        key := gen.methodKey(parentClass.Name, method.Name)
+        if _, exists := inheritedMethods[key]; !exists {
+            isSelf := (method.ReturnType == "SELF_TYPE")
+            retTy := "i8*"
+            if !isSelf {
+                retTy = gen.llvmType(method.ReturnType)
+            }
+
+            var pTys []string
+            pTys = append(pTys, "i8*") // self
+            for _, param := range method.Parameters {
+                pTys = append(pTys, gen.llvmType(param.Type))
+            }
+
+            inheritedMethods[key] = MethodSig{
+                ReturnType:   retTy,
+                ParamTypes:   pTys,
+                IsReturnSelf: isSelf,
+            }
+        }
+    }
+
+    return inheritedMethods
+}
+
+
+func (gen *IRGenerator) genClass(class *structures.ClassDecl, program *structures.Program) {
     gen.currentClass = class.Name
-    for _, m := range class.Methods {
+    inheritedMethods := gen.getInheritedMethods(class.Parent, program)
+    allMethods := append(inheritedMethods, class.Methods...)
+    for _, m := range allMethods {
         gen.genMethod(class.Name, &m)
     }
 }
 
+
+func (gen *IRGenerator) getInheritedMethods(parentName string, program *structures.Program) []structures.Method {
+    var methods []structures.Method
+    
+    if parentName == "" || parentName == "Object" {
+        return methods // Base case: Object has no parent
+    }
+
+    // Find parent class in the AST
+    for _, class := range program.Classes {
+        if class.Name == parentName {
+            methods = append(methods, class.Methods...)
+            // Recursively get methods from grandparent classes
+            methods = append(methods, gen.getInheritedMethods(class.Parent, program)...)
+            break
+        }
+    }
+    
+    return methods
+}
+
 // genNewFunction generates a "Class_new" function that allocates memory for objects using malloc.
-// Here we assume each object occupies ((number_of_attributes + 1) * 8) bytes.
-func (gen *IRGenerator) genNewFunction(class *ast.ClassDecl) {
+// Each object occupies ((number_of_attributes + 1) * 8) bytes.
+func (gen *IRGenerator) genNewFunction(class *structures.ClassDecl) {
     // For built-in classes, assume runtime provides new functions.
     if class.Name == "Object" || class.Name == "IO" ||
         class.Name == "Int" || class.Name == "String" || class.Name == "Bool" {
         return
     }
-    numAttrs := len(class.Attributes)
-    size := (numAttrs + 1) * 8 // Each attribute is 8 bytes, including the class tag
+    
+    // Gather all inherited attributes + our own
+    allAttrs := gen.gatherAllAttributes(class.Name)
+    totalSize := (len(allAttrs) + 1) * 8 // +1 for the class-tag pointer
+
     gen.emit(fmt.Sprintf("define i8* @%s_new() {", class.Name))
-    gen.emit(fmt.Sprintf("  %%size = add i32 %d, 0", size))
+    gen.emit(fmt.Sprintf("  %%size = add i32 %d, 0", totalSize))
     gen.emit("  %ptr = call i8* @malloc(i32 %size)")
 
-    // Initialize all attributes to 0
-    for i, attr := range class.Attributes {
-        offset := i * 8 // Assuming each attribute is 8 bytes
-        fmt.Printf("[DEBUG] %s.%s at offset %d\n", class.Name, attr.Name, offset)
-        fmt.Print(gen.attributes)
-        gen.attributes[fmt.Sprintf("%s.%s", class.Name, attr.Name)] = offset
+    // Store the class name pointer at offset 0
+    namePtr := gen.generateTypeNameConstant(class.Name)
+    gen.emit(fmt.Sprintf("  store i8* %s, i8** %%ptr", namePtr))
+
+    // Initialize all inherited + child attributes to 0 (or null)
+    for i, attr := range allAttrs {
+        offset := (i + 1) * 8
+        // Save the offset in our map so that VarExpr / AssignExpr can find it
+        key := fmt.Sprintf("%s.%s", class.Name, attr.Name)
+        gen.attributes[key] = offset
 
         fieldPtr := gen.newTemp()
         gen.emit(fmt.Sprintf("  %s = getelementptr i8, i8* %%ptr, i32 %d", fieldPtr, offset))
-        gen.emit(fmt.Sprintf("  store i32 0, i32* %s", fieldPtr)) // Default to 0
+        gen.emit(fmt.Sprintf("  store i32 0, i32* %s", fieldPtr))
     }
 
     gen.emit("  ret i8* %ptr")
     gen.emit("}")
 }
+    
 
-func (gen *IRGenerator) genMethod(className string, method *ast.Method) {
+func (gen *IRGenerator) genMethod(className string, method *structures.Method) {
+    if method.Name == "out_string" || method.Name == "out_int" || 
+        method.Name == "in_string" || method.Name == "in_int" || 
+        method.Name == "abort" || method.Name == "type_name" || method.Name == "copy" {
+        return 
+    }
     // Start fresh var map for each method
     gen.vars = make(map[string]VarInfo)
 
@@ -351,32 +403,30 @@ func (gen *IRGenerator) genMethod(className string, method *ast.Method) {
     gen.emit("}\n")
 }
 
-// ----------------------------------------------------------------------------
-//    Below is the *NEW* genExprEx that returns (reg, llvmTy, coolTy).
-//    Then we define small helpers to cast/unify these results
-// ----------------------------------------------------------------------------
-func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
+//   Below is the *NEW* genExprEx that returns (reg, llvmTy, coolTy).
+//   Then we define small helpers to cast/unify these results
+func (gen *IRGenerator) genExprEx(expr structures.Expr) ExprResult {
     switch e := expr.(type) {
-    case *ast.IntExpr:
+    case *structures.IntExpr:
         return ExprResult{
             reg:    fmt.Sprintf("%d", e.Value),
             llvmTy: "i32",
             coolTy: "Int",
         }
-    case *ast.BoolExpr:
+    case *structures.BoolExpr:
         val := "0"
         if e.Value {
             val = "1"
         }
         return ExprResult{reg: val, llvmTy: "i32", coolTy: "Bool"}
-    case *ast.StringExpr:
+    case *structures.StringExpr:
         gl := gen.newStringConstant(e.Value)
         tmp := gen.newTemp()
         length := len(e.Value) + 1
         gen.emit(fmt.Sprintf("  %s = getelementptr [%d x i8], [%d x i8]* %s, i32 0, i32 0",
             tmp, length, length, gl))
         return ExprResult{reg: tmp, llvmTy: "i8*", coolTy: "String"}
-    case *ast.VarExpr:
+    case *structures.VarExpr:
         // 1. First, check if it's a local variable (let-binding, parameter, etc.)
         if info, ok := gen.vars[e.Name]; ok {
             loadReg := gen.newTemp()
@@ -404,12 +454,11 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
         gen.vars[e.Name] = VarInfo{ptrReg: ptr, llvmType: "i32", coolType: "Int"}
         return ExprResult{reg: loadReg, llvmTy: "i32", coolTy: "Int"}
     
-    case *ast.AssignExpr:
+    case *structures.AssignExpr:
         rhs := gen.genExprEx(e.Value)
     
         // Check if assigning to an object attribute
         attrKey := fmt.Sprintf("%s.%s", gen.currentClass, e.Name)
-        fmt.Println(attrKey, gen.attributes)
         if offset, ok := gen.attributes[attrKey]; ok {
             fieldPtr := gen.newTemp()
             gen.emit(fmt.Sprintf("  %s = getelementptr i8, i8* %%self, i32 %d", fieldPtr, offset))
@@ -431,7 +480,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
             info.llvmType, fixed.reg, info.llvmType, info.ptrReg))
         return fixed
     
-    case *ast.NewExpr:
+    case *structures.NewExpr:
        	className := e.Type
         if className == "SELF_TYPE" {
             className = gen.currentClass
@@ -439,9 +488,9 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
         newReg := gen.newTemp()
         gen.emit(fmt.Sprintf("  %s = call i8* @%s_new()", newReg, className))
         return ExprResult{reg: newReg, llvmTy: "i8*", coolTy: className}
-    case *ast.DispatchExpr:
+    case *structures.DispatchExpr:
         return gen.genDispatchEx(e)
-    case *ast.StaticDispatchExpr:
+    case *structures.StaticDispatchExpr:
         // Evaluate the caller expression
        	caller := gen.genExprEx(e.Caller)
        	fixedCaller := castResultIfNeeded(caller, "i8*", gen)
@@ -491,7 +540,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
        	}
        	return ExprResult{reg: callReg, llvmTy: sig.ReturnType, coolTy: retCool}
 
-    case *ast.IfExpr:
+    case *structures.IfExpr:
         uniqueID := gen.newTemp()[1:]
         thenLabel := "if_then_" + uniqueID
         elseLabel := "if_else_" + uniqueID
@@ -539,7 +588,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
     
         return ExprResult{reg: finalResult, llvmTy: "i32", coolTy: "Int"}
     
-	case *ast.LetExpr:
+	case *structures.LetExpr:
         oldVars := gen.vars
        	// Create a fresh scope (shallow copy)
        	newVars := make(map[string]VarInfo)
@@ -569,13 +618,13 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
        	bodyRes := gen.genExprEx(e.Body)
        	gen.vars = oldVars // restore previous scope
        	return bodyRes
-    case *ast.BlockExpr:
+    case *structures.BlockExpr:
         var last ExprResult
        	for _, subExpr := range e.Expressions {
            	last = gen.genExprEx(subExpr)
        	}
        	return last
-    case *ast.WhileExpr:
+    case *structures.WhileExpr:
        	loopLabel := gen.newTemp()[1:]
        	bodyLabel := gen.newTemp()[1:]
        	doneLabel := gen.newTemp()[1:]
@@ -592,7 +641,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
        	gen.emit(fmt.Sprintf("%s:", doneLabel))
        	// While returns an integer constant (could represent void)
        	return ExprResult{reg: "0", llvmTy: "i32", coolTy: "Int"}
-    case *ast.UnaryExpr:
+    case *structures.UnaryExpr:
        	operand := gen.genExprEx(e.Operand)
        	switch e.Operator {
        	case "not":
@@ -620,7 +669,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
            	gen.emit("; unhandled unary operator")
            	return ExprResult{"0", "i32", "Int"}
        	}
-    case *ast.BinaryExpr:
+    case *structures.BinaryExpr:
        	left := gen.genExprEx(e.Left)
        	right := gen.genExprEx(e.Right)
        	left = castResultIfNeeded(left, "i32", gen)
@@ -664,7 +713,7 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
            	gen.emit("; unknown binary operator")
            	return ExprResult{"0", "i32", "Int"}
        	}
-    case *ast.CaseExpr:
+    case *structures.CaseExpr:
        	gen.emit("; case expression stub: selecting first branch")
        	_ = gen.genExprEx(e.Expr)
        	if len(e.Cases) > 0 {
@@ -678,19 +727,19 @@ func (gen *IRGenerator) genExprEx(expr ast.Expr) ExprResult {
 }
 
 
-// -----------------------------------------------------------------------------
-// The new dynamic dispatch that returns an ExprResult
-// -----------------------------------------------------------------------------
-func (gen *IRGenerator) genDispatchEx(e *ast.DispatchExpr) ExprResult {
+// The dynamic dispatch that returns an ExprResult
+func (gen *IRGenerator) genDispatchEx(e *structures.DispatchExpr) ExprResult {
     caller := gen.genExprEx(e.Caller)
     // cast to i8*
     fixedCaller := castResultIfNeeded(caller, "i8*", gen)
     // figure out actual class name
     var className string
     // If the caller is 'self' and the method is an IO function, force lookup in IO.
-    if v, ok := e.Caller.(*ast.VarExpr); ok && v.Name == "self" {
+    if v, ok := e.Caller.(*structures.VarExpr); ok && v.Name == "self" {
         if e.Method == "out_string" || e.Method == "out_int" || e.Method == "in_string" || e.Method == "in_int" {
             className = "IO"
+        } else if e.Method == "type_name" || e.Method == "abort" || e.Method == "copy" {
+            className = "Object"
         } else {
             className = gen.currentClass
         }
@@ -701,7 +750,6 @@ func (gen *IRGenerator) genDispatchEx(e *ast.DispatchExpr) ExprResult {
         }
     }
     // fallback if caller is literally self, etc. (like your old logic), or if we detect "out_int"
-    // But let's do a simpler approach:
     mk := gen.methodKey(className, e.Method)
     sig, ok := gen.methodSignatures[mk]
     if !ok {
@@ -715,6 +763,12 @@ func (gen *IRGenerator) genDispatchEx(e *ast.DispatchExpr) ExprResult {
             sig = MethodSig{ReturnType: "i8*", ParamTypes: []string{"i8*"}}
         case "in_int":
             sig = MethodSig{ReturnType: "i32", ParamTypes: []string{"i8*"}}
+        case "abort":
+            sig = MethodSig{ReturnType: "i8*", ParamTypes: []string{"i8*"}}
+        case "type_name":
+            sig = MethodSig{ReturnType: "i8*", ParamTypes: []string{"i8*"}}
+        case "copy":
+            sig = MethodSig{ReturnType: "i8*", ParamTypes: []string{"i8*"}}
         default:
             sig = MethodSig{ReturnType: "i32", ParamTypes: []string{"i8*"}}
         }
@@ -749,7 +803,6 @@ func (gen *IRGenerator) genDispatchEx(e *ast.DispatchExpr) ExprResult {
         retCool = caller.coolTy
     } else {
         // We can't know for sure; fallback to "Int" if ReturnType==i32, else the class name
-        // This is a bit hacky:
         if sig.ReturnType == "i32" {
             retCool = "Int"
         } else {
@@ -761,29 +814,8 @@ func (gen *IRGenerator) genDispatchEx(e *ast.DispatchExpr) ExprResult {
     return ExprResult{reg: callReg, llvmTy: sig.ReturnType, coolTy: retCool}
 }
 
-// -----------------------------------------------------------------------------
-// Helper to unify the LLVM types of two ExprResults
-// -----------------------------------------------------------------------------
-func unifyLLVMTypes(a, b string) string {
-    if a == b {
-        return a
-    }
-    if a == "i8*" || b == "i8*" {
-        return "i8*"
-    }
-    return "i32"
-}
-func unifyCoolTypes(a, b string) string {
-    if a == b {
-        return a
-    }
-    // naive fallback
-    return "Object"
-}
 
-// -----------------------------------------------------------------------------
 // Cast an ExprResult to a new LLVM type if needed
-// -----------------------------------------------------------------------------
 func castResultIfNeeded(r ExprResult, toTy string, gen *IRGenerator) ExprResult {
     if r.llvmTy == toTy {
         return r
@@ -804,12 +836,3 @@ func castResultIfNeeded(r ExprResult, toTy string, gen *IRGenerator) ExprResult 
     return r
 }
 
-// -----------------------------------------------------------------------------
-// If you want to keep the old genExpr, you can just call genExprEx internally.
-// For example, define a small wrapper:
-// -----------------------------------------------------------------------------
-
-func (gen *IRGenerator) genExpr(expr ast.Expr) (string, string) {
-    r := gen.genExprEx(expr)
-    return r.reg, r.llvmTy
-}

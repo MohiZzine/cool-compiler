@@ -1,263 +1,206 @@
 package semantic
 
 import (
-	"cool-compiler/ast"
+	"cool-compiler/structures"
+	"cool-compiler/utils"
 	"errors"
 	"fmt"
 )
 
-func BuildSymbolTable(program *ast.Program) *SymbolTable {
-	globalTable := NewSymbolTable(nil) // Root symbol table
-    AddBasicClasses(globalTable)
-	fmt.Println("[DEBUG] Constructing Symbol Table...")
+// semLogger logs semantic debug and error messages.
+var semLogger *locallogger
 
-	// First pass: Register class names
+type locallogger struct {
+	debugLogger *utils.Debug
+	errorLogger *utils.Error
+}
+
+// error logs an error message.
+func (l *locallogger) error(msg string) {
+	l.errorLogger.LogLine("[Semantic Error] " + msg)
+}
+
+// logDebug logs a debug message.
+func (l *locallogger) logDebug(msg string) {
+	l.debugLogger.LogLine("[SEMANTIC DEBUG] " + msg)
+}
+
+// BuildSymbolTable constructs the global symbol table and injects basic classes.
+func BuildSymbolTable(program *structures.Program, debugLogger *utils.Debug, errorLogger *utils.Error) *structures.SymbolTable {
+	semLogger = &locallogger{debugLogger: debugLogger, errorLogger: errorLogger}
+	globalTable := structures.NewSymbolTable(nil)
+	utils.InjectBasicClassesST(globalTable)
+	semLogger.logDebug("Constructing Symbol Table...")
+
+	counts := make(map[string]int)
+	for _, cls := range program.Classes {
+		counts[cls.Name]++
+	}
+
+	for name, cnt := range counts {
+		switch name {
+		case "Object", "IO", "Int", "String", "Bool":
+			if cnt > 1 {
+				semLogger.error("Redefinition of basic class " + name)
+			}
+		}
+	}
+
 	for _, class := range program.Classes {
-		fmt.Printf("[DEBUG] Registering class: %s\n", class.Name)
-		switch class.Name {
-        case "Object", "IO", "Int", "String", "Bool":
-            fmt.Printf("[ERROR] Redefinition of basic class %s\n", class.Name)
-        }
-
-		// Create a new scope for the class
 		classScope := globalTable.NewScope()
-
-		// Register the class in the global table
-		globalTable.AddEntry(class.Name, SymbolEntry{
+		globalTable.AddEntry(class.Name, structures.SymbolEntry{
 			Type:   "class",
 			Scope:  classScope,
 			Parent: class.Parent,
 		})
 	}
 
-	// Second pass: Register attributes and methods, handling inheritance
 	for _, class := range program.Classes {
-		fmt.Printf("[DEBUG] Processing class: %s\n", class.Name)
-
+		semLogger.logDebug("Processing class: " + class.Name)
 		classEntry, _ := globalTable.GetEntry(class.Name)
 		classScope := classEntry.Scope
-
-		// If class has a parent, inherit attributes/methods
 		if class.Parent != "" {
 			parentEntry, exists := globalTable.GetEntry(class.Parent)
 			if exists {
-				parentScope := parentEntry.Scope
-				resolveParentScope(classScope, parentScope)
+				resolveParentScope(classScope, parentEntry.Scope)
 			} else {
-				fmt.Printf("[ERROR] Parent class %s not found for %s\n", class.Parent, class.Name)
+				semLogger.error(fmt.Sprintf("Parent class %s not found for %s", class.Parent, class.Name))
 			}
 		}
-
-		// Register attributes
 		for _, attr := range class.Attributes {
 			if attr.Name == "self" {
-				fmt.Printf("[ERROR] Attribute name 'self' is reserved in class %s\n", class.Name)
+				semLogger.error("Attribute name 'self' is reserved in class " + class.Name)
 				continue
 			}
-
-			fmt.Printf("[DEBUG] Adding attribute: %s of type %s in class %s\n",
-				attr.Name, attr.Type, class.Name)
-
-			// Ensure attributes are not redefining existing ones
+			semLogger.logDebug(fmt.Sprintf("Adding attribute: %s of type %s in class %s", attr.Name, attr.Type, class.Name))
 			if _, exists := classScope.GetEntry(attr.Name); exists {
-				fmt.Printf("[ERROR] Attribute %s is redefined in class %s\n", attr.Name, class.Name)
+				semLogger.error(fmt.Sprintf("Attribute %s is redefined in class %s", attr.Name, class.Name))
 				continue
 			}
-
-			classScope.AddEntry(attr.Name, SymbolEntry{
+			classScope.AddEntry(attr.Name, structures.SymbolEntry{
 				Type:     attr.Type,
 				AttrType: &attr.InitValue,
 			})
 		}
-
-		// Register methods
 		for _, method := range class.Methods {
-			fmt.Printf("[DEBUG] Registering method: %s in class %s\n", method.Name, class.Name)
-
-			methodScope := classScope.NewScope() // New scope for method
-			methodScope.AddEntry("self", SymbolEntry{Type: class.Name})
-			// Ensure method overriding is valid
+			semLogger.logDebug(fmt.Sprintf("Registering method: %s in class %s", method.Name, class.Name))
+			methodScope := classScope.NewScope()
+			methodScope.AddEntry("self", structures.SymbolEntry{Type: class.Name})
 			if parentMethod, found := classScope.GetEntry(method.Name); found {
 				if parentMethod.Type != method.ReturnType {
-					fmt.Printf("[ERROR] Method %s in class %s does not match return type of parent method\n",
-						method.Name, class.Name)
+					semLogger.error(fmt.Sprintf("Method %s in class %s does not match return type of parent method", method.Name, class.Name))
 				}
 			}
-
-			// Add method entry
-			classScope.AddEntry(method.Name, SymbolEntry{
+			classScope.AddEntry(method.Name, structures.SymbolEntry{
 				Type:   method.ReturnType,
 				Method: &method,
 				Scope:  methodScope,
 			})
-
-			// Register method parameters inside method scope
 			for _, param := range method.Parameters {
 				if param.Name == "self" {
-					fmt.Printf("[ERROR] Parameter name 'self' is reserved in method %s\n", method.Name)
+					semLogger.error("Parameter name 'self' is reserved in method " + method.Name)
 					continue
 				}
-
-				fmt.Printf("[DEBUG] Adding parameter: %s of type %s in method %s\n",
-					param.Name, param.Type, method.Name)
-
-				methodScope.AddEntry(param.Name, SymbolEntry{
+				semLogger.logDebug(fmt.Sprintf("Adding parameter: %s of type %s in method %s", param.Name, param.Type, method.Name))
+				methodScope.AddEntry(param.Name, structures.SymbolEntry{
 					Type: param.Type,
 				})
 			}
-
-			// Traverse the method body to register let bindings
 			processMethodBody(methodScope, method.Body)
 		}
 	}
-
-	fmt.Println("[DEBUG] Symbol Table construction completed.")
+	semLogger.logDebug("Symbol Table construction completed.")
 	return globalTable
 }
 
-// resolveParentScope copies attributes and methods from the parent to child
-func resolveParentScope(childScope *SymbolTable, parentScope *SymbolTable) {
+// resolveParentScope copies entries from parentScope to childScope if not already present.
+func resolveParentScope(childScope, parentScope *structures.SymbolTable) {
 	for name, entry := range parentScope.Table {
-		// Skip if already defined in child
 		if _, exists := childScope.GetEntry(name); !exists {
 			childScope.AddEntry(name, entry)
-			fmt.Printf("[DEBUG] Inherited %s from parent scope\n", name)
+			semLogger.logDebug("Inherited " + name + " from parent scope")
 		}
 	}
 }
 
-// Handles expressions inside methods (let, if, while, etc.)
-func processMethodBody(scope *SymbolTable, expr ast.Expr) {
+// processMethodBody traverses method body expressions to register let bindings.
+func processMethodBody(scope *structures.SymbolTable, expr structures.Expr) {
 	if expr == nil {
 		return
 	}
-
 	switch e := expr.(type) {
-	case *ast.LetExpr:
-		fmt.Printf("[DEBUG] Processing let expression with %d bindings\n", len(e.Variables))
-
+	case *structures.LetExpr:
+		semLogger.logDebug(fmt.Sprintf("Processing let expression with %d bindings", len(e.Variables)))
 		letScope := scope.NewScope()
 		for _, binding := range e.Variables {
-			fmt.Printf("[DEBUG] Adding let variable: %s of type %s\n", binding.Name, binding.Type)
-			letScope.AddEntry(binding.Name, SymbolEntry{
+			semLogger.logDebug(fmt.Sprintf("Adding let variable: %s of type %s", binding.Name, binding.Type))
+			letScope.AddEntry(binding.Name, structures.SymbolEntry{
 				Type: binding.Type,
 			})
 		}
 		processMethodBody(letScope, e.Body)
-
-	case *ast.BlockExpr:
-		fmt.Printf("[DEBUG] Processing block with %d expressions\n", len(e.Expressions))
+	case *structures.BlockExpr:
+		semLogger.logDebug(fmt.Sprintf("Processing block with %d expressions", len(e.Expressions)))
 		for _, subExpr := range e.Expressions {
 			processMethodBody(scope, subExpr)
 		}
-
-	case *ast.IfExpr:
-		fmt.Println("[DEBUG] Processing If expression")
+	case *structures.IfExpr:
+		semLogger.logDebug("Processing If expression")
 		processMethodBody(scope, e.Condition)
 		processMethodBody(scope, e.ThenBranch)
 		processMethodBody(scope, e.ElseBranch)
-
-	case *ast.WhileExpr:
-		fmt.Println("[DEBUG] Processing While loop")
+	case *structures.WhileExpr:
+		semLogger.logDebug("Processing While loop")
 		processMethodBody(scope, e.Condition)
 		processMethodBody(scope, e.Body)
-
-	case *ast.AssignExpr:
-		fmt.Printf("[DEBUG] Processing Assignment to %s\n", e.Name)
+	case *structures.AssignExpr:
+		semLogger.logDebug("Processing Assignment to " + e.Name)
 		processMethodBody(scope, e.Value)
-
-	case *ast.BinaryExpr:
-		fmt.Println("[DEBUG] Processing Binary Expression")
+	case *structures.BinaryExpr:
+		semLogger.logDebug("Processing Binary Expression")
 		processMethodBody(scope, e.Left)
 		processMethodBody(scope, e.Right)
-
-	case *ast.UnaryExpr:
-		fmt.Println("[DEBUG] Processing Unary Expression")
+	case *structures.UnaryExpr:
+		semLogger.logDebug("Processing Unary Expression")
 		processMethodBody(scope, e.Operand)
-
-	case *ast.DispatchExpr:
-		fmt.Printf("[DEBUG] Processing Dispatch to method %s with %d args\n", e.Method, len(e.Arguments))
+	case *structures.DispatchExpr:
+		semLogger.logDebug(fmt.Sprintf("Processing Dispatch to method %s with %d args", e.Method, len(e.Arguments)))
 		for _, arg := range e.Arguments {
 			processMethodBody(scope, arg)
 		}
-
-	case *ast.StaticDispatchExpr:
-		fmt.Printf("[DEBUG] Processing Static Dispatch to %s::%s\n", e.Type, e.Method)
+	case *structures.StaticDispatchExpr:
+		semLogger.logDebug(fmt.Sprintf("Processing Static Dispatch to %s::%s", e.Type, e.Method))
 		for _, arg := range e.Arguments {
 			processMethodBody(scope, arg)
 		}
 	}
 }
 
-
-// SemanticAnalyzer holds the symbol table and performs analysis.
-type SemanticAnalyzer struct {
-	symbolTable *SymbolTable
-}
-
-// NewSemanticAnalyzer creates a new SemanticAnalyzer.
-func NewSemanticAnalyzer(st *SymbolTable) *SemanticAnalyzer {
-	return &SemanticAnalyzer{symbolTable: st}
-}
-
-// Analyze performs the complete semantic analysis on the given program.
-func (sa *SemanticAnalyzer) Analyze(program *ast.Program) error {
-	// 1. Check the inheritance graph.
-	if err := checkInheritanceGraph(program, sa.symbolTable); err != nil {
-		return err
-	}
-
-	// 2. Check that Main class and main method exist.
-	if err := checkMainClassAndMethod(program, sa.symbolTable); err != nil {
-		return err
-	}
-
-	// 3. Type-check each method body in each class.
-	for _, class := range program.Classes {
-		if class.Name == "Object" || class.Name == "IO" || class.Name == "Int" || class.Name == "String" || class.Name == "Bool" {
-			continue //Skip basic classes
-		}
-		for _, method := range class.Methods {
-			if err := typeCheckMethod(class, &method, sa.symbolTable); err != nil {
-				return fmt.Errorf("in class %s, method %s: %v", class.Name, method.Name, err)
-			}
-		}
-	}
-
-
-	return nil
-}
-
-// -----------------------------------------------------------------------------
-// Inheritance Graph and Main Class Checks
-// -----------------------------------------------------------------------------
-
-// checkInheritanceGraph uses DFS to ensure no cycles exist and all parents are defined.
-func checkInheritanceGraph(program *ast.Program, st *SymbolTable) error {
-	// Build a mapping: class name -> parent name (if any)
+// checkInheritanceGraph verifies there are no cycles and all parent classes exist.
+func checkInheritanceGraph(program *structures.Program) error {
 	graph := make(map[string]string)
 	for _, class := range program.Classes {
 		if class.Parent != "" {
 			graph[class.Name] = class.Parent
 		}
 	}
-
 	visited := make(map[string]bool)
 	recStack := make(map[string]bool)
 	for className := range graph {
 		if !visited[className] {
 			if dfsCycle(className, graph, visited, recStack) {
-				return fmt.Errorf("inheritance cycle detected involving class %s", className)
+				semLogger.error("Inheritance cycle detected involving class " + className)
+				return errors.New("inheritance cycle detected involving class " + className)
 			}
 		}
 	}
 	return nil
 }
 
+// dfsCycle uses DFS to detect cycles in the inheritance graph.
 func dfsCycle(className string, graph map[string]string, visited, recStack map[string]bool) bool {
 	visited[className] = true
 	recStack[className] = true
-
 	parent, exists := graph[className]
 	if exists {
 		if !visited[parent] {
@@ -272,42 +215,38 @@ func dfsCycle(className string, graph map[string]string, visited, recStack map[s
 	return false
 }
 
-// checkMainClassAndMethod ensures a Main class exists and that it defines a no-parameter main method.
-func checkMainClassAndMethod(program *ast.Program, st *SymbolTable) error {
+// checkMainClassAndMethod ensures that Main class and a no-parameter main method exist.
+func checkMainClassAndMethod(st *structures.SymbolTable) error {
 	mainEntry, ok := st.GetEntry("Main")
 	if !ok {
-		return errors.New("Main class not found")
+		semLogger.error("Main class not found")
+		return errors.New("main class not found")
 	}
 	mainScope := mainEntry.Scope
 	mainMethodEntry, ok := mainScope.GetEntry("main")
 	if !ok {
+		semLogger.error("main method not found in Main class")
 		return errors.New("main method not found in Main class")
 	}
 	if mainMethodEntry.Method != nil && len(mainMethodEntry.Method.Parameters) > 0 {
+		semLogger.error("main method in Main class must have no parameters")
 		return errors.New("main method in Main class must have no parameters")
 	}
 	return nil
 }
 
-// -----------------------------------------------------------------------------
-// Type Conformance and Expression Type-Checking
-// -----------------------------------------------------------------------------
-
-// typeConforms checks whether childType conforms to parentType based on the inheritance chain.
-func typeConforms(childType, parentType string, st *SymbolTable) bool {
-	fmt.Printf("[DEBUG] Checking type conformance: %s <: %s\n", childType, parentType)
+// typeConforms checks if childType conforms to parentType.
+func typeConforms(childType, parentType string, st *structures.SymbolTable) bool {
 	if parentType == "SELF_TYPE" {
 		return true
 	}
 	if childType == parentType {
 		return true
 	}
-	// Look up the child class entry
 	entry, ok := st.GetEntry(childType)
 	if !ok {
 		return false
 	}
-	// Walk up the inheritance chain
 	for entry.Parent != "" {
 		if entry.Parent == parentType {
 			return true
@@ -321,49 +260,52 @@ func typeConforms(childType, parentType string, st *SymbolTable) bool {
 	return false
 }
 
-// typeCheckMethod type-checks the body of a method and verifies its return type.
-func typeCheckMethod(class ast.ClassDecl, method *ast.Method, st *SymbolTable) error {
-	// Get the method's own scope from the symbol table
+// typeCheckMethod checks a method's body type against its declared return type.
+func typeCheckMethod(class structures.ClassDecl, method *structures.Method, st *structures.SymbolTable) error {
 	classEntry, _ := st.GetEntry(class.Name)
 	methodEntry, ok := classEntry.Scope.GetEntry(method.Name)
 	if !ok || methodEntry.Scope == nil {
-		return fmt.Errorf("unable to locate symbol table for method %s", method.Name)
+		semLogger.error("Unable to locate symbol table for method " + method.Name)
+		return errors.New("unable to locate symbol table for method " + method.Name)
 	}
 	methodScope := methodEntry.Scope
-	// Type-check the method body
 	inferredType, err := typeCheckExpr(method.Body, methodScope, st, class.Name)
 	if err != nil {
-		return err
+		semLogger.error(err.Error())
+		return errors.New(err.Error())
 	}
-	// Check that the inferred type conforms to the declared return type.
 	if !typeConforms(inferredType, method.ReturnType, st) {
-		return fmt.Errorf("body type %s does not conform to declared return type %s", inferredType, method.ReturnType)
+		msg := "body type " + inferredType + " does not conform to declared return type " + method.ReturnType
+		semLogger.error(msg)
+		return errors.New(msg)
 	}
 	return nil
 }
 
-// typeCheckExpr recursively type-checks expressions and returns the inferred type.
-func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentClass string) (string, error) {
+// typeCheckExpr recursively type-checks an expression and returns its type.
+func typeCheckExpr(expr structures.Expr, scope *structures.SymbolTable, st *structures.SymbolTable, currentClass string) (string, error) {
 	switch e := expr.(type) {
-	case *ast.IntExpr:
+	case *structures.IntExpr:
 		return "Int", nil
-	case *ast.BoolExpr:
+	case *structures.BoolExpr:
 		return "Bool", nil
-	case *ast.StringExpr:
+	case *structures.StringExpr:
 		return "String", nil
-	case *ast.VarExpr:
+	case *structures.VarExpr:
 		entry, ok := scope.GetEntry(e.Name)
 		if !ok {
-			return "", fmt.Errorf("undefined variable %s", e.Name)
+			msg := "undefined variable " + e.Name
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		return entry.Type, nil
-	case *ast.AssignExpr:
-		// The left-hand side should be a variable.
+	case *structures.AssignExpr:
 		if e.Name == "self" {
-			return "", fmt.Errorf("cannot assign to 'self'")
+			msg := "cannot assign to 'self'"
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
-
-		varType, err := typeCheckExpr(&ast.VarExpr{Name: e.Name}, scope, st, currentClass)
+		varType, err := typeCheckExpr(&structures.VarExpr{Name: e.Name}, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
@@ -372,10 +314,12 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			return "", err
 		}
 		if !typeConforms(rightType, varType, st) {
-			return "", fmt.Errorf("cannot assign type %s to variable of type %s", rightType, varType)
+			msg := "cannot assign type " + rightType + " to variable of type " + varType
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		return rightType, nil
-	case *ast.BinaryExpr:
+	case *structures.BinaryExpr:
 		leftType, err := typeCheckExpr(e.Left, scope, st, currentClass)
 		if err != nil {
 			return "", err
@@ -387,19 +331,24 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 		switch e.Operator {
 		case "+", "-", "*", "/":
 			if leftType != "Int" || rightType != "Int" {
-				return "", fmt.Errorf("arithmetic operator %s requires Int operands", e.Operator)
+				msg := "arithmetic operator " + e.Operator + " requires Int operands"
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			return "Int", nil
 		case "<", "<=", "=":
-			// For basic types, both operands must be of the same type.
 			if (leftType == "Int" || leftType == "Bool" || leftType == "String") && leftType != rightType {
-				return "", fmt.Errorf("operator %s requires both operands to be of the same basic type", e.Operator)
+				msg := "operator " + e.Operator + " requires both operands to be of the same basic type"
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			return "Bool", nil
 		default:
-			return "", fmt.Errorf("unknown binary operator %s", e.Operator)
+			msg := "unknown binary operator " + e.Operator
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
-	case *ast.UnaryExpr:
+	case *structures.UnaryExpr:
 		operandType, err := typeCheckExpr(e.Operand, scope, st, currentClass)
 		if err != nil {
 			return "", err
@@ -407,26 +356,34 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 		switch e.Operator {
 		case "~":
 			if operandType != "Int" {
-				return "", fmt.Errorf("operator ~ requires an Int operand")
+				msg := "operator ~ requires an Int operand"
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			return "Int", nil
 		case "not":
 			if operandType != "Bool" {
-				return "", fmt.Errorf("operator not requires a Bool operand")
+				msg := "operator not requires a Bool operand"
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			return "Bool", nil
 		case "isvoid":
 			return "Bool", nil
 		default:
-			return "", fmt.Errorf("unknown unary operator %s", e.Operator)
+			msg := "unknown unary operator " + e.Operator
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
-	case *ast.IfExpr:
+	case *structures.IfExpr:
 		condType, err := typeCheckExpr(e.Condition, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
 		if condType != "Bool" {
-			return "", fmt.Errorf("if condition must be Bool, got %s", condType)
+			msg := "if condition must be Bool, got " + condType
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		thenType, err := typeCheckExpr(e.ThenBranch, scope, st, currentClass)
 		if err != nil {
@@ -440,21 +397,22 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			return thenType, nil
 		}
 		return "Object", nil
-	case *ast.WhileExpr:
+	case *structures.WhileExpr:
 		condType, err := typeCheckExpr(e.Condition, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
 		if condType != "Bool" {
-			return "", fmt.Errorf("while loop condition must be Bool, got %s", condType)
+			msg := "while loop condition must be Bool, got " + condType
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
-		// The type of a while loop is Object.
 		_, err = typeCheckExpr(e.Body, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
 		return "Object", nil
-	case *ast.BlockExpr:
+	case *structures.BlockExpr:
 		var lastType string
 		for _, subExpr := range e.Expressions {
 			t, err := typeCheckExpr(subExpr, scope, st, currentClass)
@@ -464,12 +422,19 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			lastType = t
 		}
 		return lastType, nil
-	case *ast.LetExpr:
+	case *structures.LetExpr:
 		letScope := scope.NewScope()
 		seen := make(map[string]bool)
 		for _, binding := range e.Variables {
+			if binding.Name == "self" {
+				msg := "let binding error: cannot bind 'self'"
+				semLogger.error(msg)
+				return "", errors.New(msg)
+			}
 			if seen[binding.Name] {
-				return "", fmt.Errorf("duplicate let binding for %s", binding.Name)
+				msg := "duplicate let binding for " + binding.Name
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			seen[binding.Name] = true
 			if binding.InitValue != nil {
@@ -478,29 +443,37 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 					return "", err
 				}
 				if !typeConforms(initType, binding.Type, st) {
-					return "", fmt.Errorf("let binding %s: initializer type %s does not conform to declared type %s", binding.Name, initType, binding.Type)
+					msg := "let binding " + binding.Name + ": initializer type " + initType + " does not conform to declared type " + binding.Type
+					semLogger.error(msg)
+					return "", errors.New(msg)
 				}
 			}
-			letScope.AddEntry(binding.Name, SymbolEntry{
+			letScope.AddEntry(binding.Name, structures.SymbolEntry{
 				Type: binding.Type,
 			})
 		}
 		return typeCheckExpr(e.Body, letScope, st, currentClass)
-	case *ast.DispatchExpr:
+	case *structures.DispatchExpr:
 		callerType, err := typeCheckExpr(e.Caller, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
 		classEntry, ok := st.GetEntry(callerType)
 		if !ok {
-			return "", fmt.Errorf("type %s not defined", callerType)
+			msg := "type " + callerType + " not defined"
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		methodEntry, ok := classEntry.Scope.GetEntry(e.Method)
 		if !ok || methodEntry.Method == nil {
-			return "", fmt.Errorf("method %s not found in type %s", e.Method, callerType)
+			msg := "method " + e.Method + " not found in type " + callerType
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		if len(e.Arguments) != len(methodEntry.Method.Parameters) {
-			return "", fmt.Errorf("method %s expects %d arguments, got %d", e.Method, len(methodEntry.Method.Parameters), len(e.Arguments))
+			msg := "method " + e.Method + " expects " + fmt.Sprintf("%d", len(methodEntry.Method.Parameters)) + " arguments, got " + fmt.Sprintf("%d", len(e.Arguments))
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		for i, arg := range e.Arguments {
 			argType, err := typeCheckExpr(arg, scope, st, currentClass)
@@ -509,31 +482,41 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			}
 			expectedType := methodEntry.Method.Parameters[i].Type
 			if !typeConforms(argType, expectedType, st) {
-				return "", fmt.Errorf("argument %d of method %s: type %s does not conform to expected type %s", i, e.Method, argType, expectedType)
+				msg := fmt.Sprintf("argument %d of method %s: type %s does not conform to expected type %s", i, e.Method, argType, expectedType)
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 		}
 		if methodEntry.Method.ReturnType == "SELF_TYPE" {
 			return callerType, nil
 		}
 		return methodEntry.Method.ReturnType, nil
-	case *ast.StaticDispatchExpr:
+	case *structures.StaticDispatchExpr:
 		callerType, err := typeCheckExpr(e.Caller, scope, st, currentClass)
 		if err != nil {
 			return "", err
 		}
 		if !typeConforms(callerType, e.Type, st) {
-			return "", fmt.Errorf("static dispatch: caller type %s does not conform to explicit type %s", callerType, e.Type)
+			msg := "static dispatch: caller type " + callerType + " does not conform to explicit type " + e.Type
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		classEntry, ok := st.GetEntry(e.Type)
 		if !ok {
-			return "", fmt.Errorf("type %s not defined", e.Type)
+			msg := "type " + e.Type + " not defined"
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		methodEntry, ok := classEntry.Scope.GetEntry(e.Method)
 		if !ok || methodEntry.Method == nil {
-			return "", fmt.Errorf("method %s not found in type %s", e.Method, e.Type)
+			msg := "method " + e.Method + " not found in type " + e.Type
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		if len(e.Arguments) != len(methodEntry.Method.Parameters) {
-			return "", fmt.Errorf("method %s expects %d arguments, got %d", e.Method, len(methodEntry.Method.Parameters), len(e.Arguments))
+			msg := "method " + e.Method + " expects " + fmt.Sprintf("%d", len(methodEntry.Method.Parameters)) + " arguments, got " + fmt.Sprintf("%d", len(e.Arguments))
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
 		for i, arg := range e.Arguments {
 			argType, err := typeCheckExpr(arg, scope, st, currentClass)
@@ -542,24 +525,28 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			}
 			expectedType := methodEntry.Method.Parameters[i].Type
 			if !typeConforms(argType, expectedType, st) {
-				return "", fmt.Errorf("static dispatch argument %d of method %s: type %s does not conform to expected type %s", i, e.Method, argType, expectedType)
+				msg := fmt.Sprintf("static dispatch argument %d of method %s: type %s does not conform to expected type %s", i, e.Method, argType, expectedType)
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 		}
 		if methodEntry.Method.ReturnType == "SELF_TYPE" {
 			return e.Type, nil
 		}
 		return methodEntry.Method.ReturnType, nil
-	case *ast.NewExpr:
+	case *structures.NewExpr:
 		if e.Type == "SELF_TYPE" {
 			return currentClass, nil
 		}
 		return e.Type, nil
-	case *ast.CaseExpr:
+	case *structures.CaseExpr:
 		branchTypes := []string{}
 		seen := make(map[string]bool)
 		for _, branch := range e.Cases {
 			if seen[branch.Type] {
-				return "", fmt.Errorf("duplicate branch type %s in case expression", branch.Type)
+				msg := "duplicate branch type " + branch.Type + " in case expression"
+				semLogger.error(msg)
+				return "", errors.New(msg)
 			}
 			seen[branch.Type] = true
 			t, err := typeCheckExpr(branch.Body, scope, st, currentClass)
@@ -569,9 +556,10 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 			branchTypes = append(branchTypes, t)
 		}
 		if len(branchTypes) == 0 {
-			return "", fmt.Errorf("case expression has no branches")
+			msg := "case expression has no branches"
+			semLogger.error(msg)
+			return "", errors.New(msg)
 		}
-		// If all branches have the same type, use that; otherwise, default to Object.
 		first := branchTypes[0]
 		allSame := true
 		for _, t := range branchTypes {
@@ -585,6 +573,41 @@ func typeCheckExpr(expr ast.Expr, scope *SymbolTable, st *SymbolTable, currentCl
 		}
 		return "Object", nil
 	default:
-		return "", fmt.Errorf("unknown expression type")
+		msg := "unknown expression type"
+		semLogger.error(msg)
+		return "", errors.New(msg)
 	}
+}
+
+// SemanticAnalyzer performs semantic analysis using the symbol table.
+type SemanticAnalyzer struct {
+	symbolTable *structures.SymbolTable
+}
+
+// NewSemanticAnalyzer creates a new SemanticAnalyzer.
+func NewSemanticAnalyzer(st *structures.SymbolTable) *SemanticAnalyzer {
+	return &SemanticAnalyzer{symbolTable: st}
+}
+
+// Analyze runs semantic analysis on the program.
+func (sa *SemanticAnalyzer) Analyze(program *structures.Program) error {
+	if err := checkInheritanceGraph(program); err != nil {
+		return err
+	}
+	if err := checkMainClassAndMethod(sa.symbolTable); err != nil {
+		return err
+	}
+	for _, class := range program.Classes {
+		if class.Name == "Object" || class.Name == "IO" || class.Name == "Int" || class.Name == "String" || class.Name == "Bool" {
+			continue
+		}
+		for _, method := range class.Methods {
+			if err := typeCheckMethod(class, &method, sa.symbolTable); err != nil {
+				errMsg := "in class " + class.Name + ", method " + method.Name + ": " + err.Error()
+				semLogger.error(errMsg)
+				return errors.New(errMsg)
+			}
+		}
+	}
+	return nil
 }

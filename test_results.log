@@ -1,0 +1,308 @@
+
+
+==========================
+Testing a circular import linker
+==========================
+
+            import depCycle.cl
+Errors found cannot assemble. Exiting...
+[Import Error] circular import detected: /mnt/c/Users/UM6P/Desktop/Learning/S3 - CI/Compilers/cool-students/tests/errors_detection/a circular import linker/depA.cl
+
+import depA.cl
+Errors found cannot assemble. Exiting...
+[Import Error] circular import detected: /mnt/c/Users/UM6P/Desktop/Learning/S3 - CI/Compilers/cool-students/tests/errors_detection/a circular import linker/depCycle.cl
+
+import depA.cl
+Errors found cannot assemble. Exiting...
+[Import Error] circular import detected: /mnt/c/Users/UM6P/Desktop/Learning/S3 - CI/Compilers/cool-students/tests/errors_detection/a circular import linker/depA.cl
+
+
+
+==========================
+Testing a not found linker
+==========================
+
+            import qfz.cl
+Errors found cannot assemble. Exiting...
+[Import Error] Cannot read file '/mnt/c/Users/UM6P/Desktop/Learning/S3 - CI/Compilers/cool-students/tests/errors_detection/a not found linker/qfz.cl': open /mnt/c/Users/UM6P/Desktop/Learning/S3 - CI/Compilers/cool-students/tests/errors_detection/a not found linker/qfz.cl: no such file or directory
+
+
+
+==========================
+Testing lexer
+==========================
+
+            -- Number Out of Range
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 3, column 54: Number out of range
+[Parser Error] Unexpected token in primary expr at token 'Number out of range' (line 3, col 16)
+[Parser Error] Expected 'in' after let bindings at token 'Number out of range' (line 3, col 16)
+[Parser Error] Expected '}' after method body at token 'Number out of range' (line 3, col 16)
+[Parser Error] Expected feature name (OBJECTID) at token 'Number out of range' (line 3, col 16)
+[Parser Error] Expected feature name (OBJECTID) at token 'in' (line 3, col 55)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 2)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 2)
+
+-- String Literal Exceeds Maximum Length
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 4, column 0: string literal exceeds maximum length of 1024 characters
+[Lexer Error] line 4, column 0: string literal exceeds maximum length of 1024 characters
+[Parser Error] Unexpected token in primary expr at token 'string literal exceeds maximum length of 1024 characters' (line 3, col 19)
+[Parser Error] Expected 'in' after let bindings at token 'string literal exceeds maximum length of 1024 characters' (line 3, col 19)
+[Parser Error] Expected '}' after method body at token 'string literal exceeds maximum length of 1024 characters' (line 3, col 19)
+[Parser Error] Expected feature name (OBJECTID) at token 'string literal exceeds maximum length of 1024 characters' (line 3, col 19)
+[Parser Error] Expected feature name (OBJECTID) at token 'in' (line 4, col 1)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+-- Unexpected Character
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 3, column 18: Unexpected character: #
+[Parser Error] Expected 'in' after let bindings at token 'Unexpected character: #' (line 3, col 18)
+[Parser Error] Expected '}' after method body at token 'Unexpected character: #' (line 3, col 18)
+[Parser Error] Expected feature name (OBJECTID) at token 'Unexpected character: #' (line 3, col 18)
+[Parser Error] Expected feature name (OBJECTID) at token '3' (line 3, col 20)
+[Parser Error] Expected feature name (OBJECTID) at token 'in' (line 3, col 22)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 2)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 2)
+
+-- Unterminated String Constant
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 4, column 0: Unterminated string constant
+[Lexer Error] line 4, column 0: Unterminated string constant
+[Parser Error] Unexpected token in primary expr at token 'Unterminated string constant' (line 3, col 19)
+[Parser Error] Expected 'in' after let bindings at token 'Unterminated string constant' (line 3, col 19)
+[Parser Error] Expected '}' after method body at token 'Unterminated string constant' (line 3, col 19)
+[Parser Error] Expected feature name (OBJECTID) at token 'Unterminated string constant' (line 3, col 19)
+[Parser Error] Expected feature name (OBJECTID) at token 'in' (line 4, col 1)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+
+
+==========================
+Testing parser
+==========================
+
+            -- Attribute Name Not Starting with a Lowercase Letter
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected feature name (OBJECTID) at token 'MainAttr' (line 2, col 1)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 10)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 12)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 2, col 15)
+
+-- Feature Not Followed by '(' or ':'
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 2, column 5: Unexpected character: !
+[Parser Error] Expected '(' (method) or ':' (attribute) at token 'Unexpected character: !' (line 2, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token 'Unexpected character: !' (line 2, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 2, col 10)
+
+-- Formal Parameter Missing Colon
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ':' in formal at token 'Int' (line 2, col 7)
+[Parser Error] Expected ')' after formal list in method declaration at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token ')' (line 2, col 10)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 12)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 14)
+[Parser Error] Expected feature name (OBJECTID) at token '{' (line 2, col 18)
+[Parser Error] Expected feature name (OBJECTID) at token '0' (line 2, col 20)
+
+-- Formal Parameter Missing Identifier
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected identifier in formal at token ':' (line 2, col 6)
+[Parser Error] Expected ')' after formal list in method declaration at token ':' (line 2, col 6)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 6)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 8)
+[Parser Error] Expected feature name (OBJECTID) at token ')' (line 2, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 13)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 15)
+[Parser Error] Expected feature name (OBJECTID) at token '{' (line 2, col 19)
+[Parser Error] Expected feature name (OBJECTID) at token '0' (line 2, col 21)
+
+-- Inheriting from a Basic Class
+Errors found cannot assemble. Exiting...
+[Parser Error] Cannot inherit from Int at token '{' (line 1, col 22)
+
+-- Left-Hand Side of Assignment Is Not a Variable
+Errors found cannot assemble. Exiting...
+[Parser Error] Left-hand side of assignment must be variable at token '<-' (line 3, col 3)
+[Parser Error] Expected '}' after method body at token '<-' (line 3, col 3)
+[Parser Error] Expected feature name (OBJECTID) at token '<-' (line 3, col 3)
+[Parser Error] Expected feature name (OBJECTID) at token '10' (line 3, col 6)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 3, col 8)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+-- Missing Colon After Method Parameter List
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ':' after method parameters at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token '{' (line 2, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token '0' (line 2, col 13)
+
+-- Missing Closing Brace for Method Body
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '}' after class features at token '' (line 3, col 3)
+
+-- Missing Closing Brace in Class Declaration
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '}' after class features at token '' (line 2, col 9)
+
+-- Missing Colon in a Case Branch
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ':' in case branch at token 'Int' (line 4, col 3)
+[Parser Error] Expected 'esac' after branch list at token 'Int' (line 4, col 3)
+[Parser Error] Expected '}' after method body at token '=>' (line 4, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token '=>' (line 4, col 7)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token 'esac' (line 5, col 1)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 5, col 5)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 6, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 6, col 5)
+
+-- Missing Closing Parenthesis After Call Arguments
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ')' after dynamic dispatch arguments at token ';' (line 3, col 14)
+[Parser Error] Expected '}' after method body at token 'self' (line 4, col 1)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+-- Missing Closing Parenthesis in Formal Parameter List
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ')' after formal list in method declaration at token ':' (line 2, col 14)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 14)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 16)
+[Parser Error] Expected feature name (OBJECTID) at token '{' (line 2, col 20)
+[Parser Error] Expected feature name (OBJECTID) at token '0' (line 2, col 22)
+
+-- Missing Closing Parenthesis in Parenthesized Expression
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected ')' after expression at token 'in' (line 3, col 23)
+
+-- Missing Dot in Static Dispatch
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 3, column 11: Unexpected character: @
+[Parser Error] Expected '}' after method body at token 'Unexpected character: @' (line 3, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token 'Unexpected character: @' (line 3, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token 'Main' (line 3, col 12)
+[Parser Error] Expected ':' after method parameters at token ';' (line 3, col 22)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 3, col 22)
+
+-- Missing Feature Name (Non-OBJECTID Token)
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected feature name (OBJECTID) at token '123' (line 2, col 1)
+[Parser Error] Expected feature name (OBJECTID) at token ':' (line 2, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token 'Int' (line 2, col 7)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 2, col 10)
+
+-- Missing Opening Brace After Class Name 
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '{' after class name at token 'main' (line 2, col 1)
+
+-- Missing Opening Brace for Method Body
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '{' to start method body at token '0' (line 2, col 13)
+[Parser Error] Expected feature name (OBJECTID) at token '0' (line 2, col 13)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 2, col 14)
+
+-- Missing Parentheses in Dynamic Dispatch
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '(' after '.' method name at token ';' (line 4, col 6)
+[Parser Error] Expected '}' after method body at token 'self' (line 5, col 1)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 5, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 5, col 5)
+
+-- Missing Parentheses in Static Dispatch
+Errors found cannot assemble. Exiting...
+[Lexer Error] line 3, column 11: Unexpected character: @
+[Parser Error] Expected '}' after method body at token 'Unexpected character: @' (line 3, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token 'Unexpected character: @' (line 3, col 11)
+[Parser Error] Expected feature name (OBJECTID) at token 'Main' (line 3, col 12)
+[Parser Error] Expected feature name (OBJECTID) at token '.' (line 3, col 16)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 3, col 20)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 3, col 20)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+-- Missing the "class" Keyword
+Errors found cannot assemble. Exiting...
+[Semantic Error] Main class not found
+Semantic analysis failed: main class not found
+
+
+
+==========================
+Testing semantic
+==========================
+
+            -- Assignment to 'self'
+Errors found cannot assemble. Exiting...
+[Semantic Error] cannot assign to 'self'
+[Semantic Error] cannot assign to 'self'
+[Semantic Error] in class Main, method main: cannot assign to 'self'
+Semantic analysis failed: in class Main, method main: cannot assign to 'self'
+
+-- Duplicate Let Binding
+Errors found cannot assemble. Exiting...
+[Semantic Error] duplicate let binding for x
+[Semantic Error] duplicate let binding for x
+[Semantic Error] in class Main, method main: duplicate let binding for x
+Semantic analysis failed: in class Main, method main: duplicate let binding for x
+
+-- Inheritance Cycle
+Errors found cannot assemble. Exiting...
+[Semantic Error] Inheritance cycle detected involving class A
+Semantic analysis failed: inheritance cycle detected involving class A
+
+-- Incorrect Operand Types for Arithmetic Operators
+Errors found cannot assemble. Exiting...
+[Semantic Error] arithmetic operator + requires Int operands
+[Semantic Error] arithmetic operator + requires Int operands
+[Semantic Error] in class Main, method main: arithmetic operator + requires Int operands
+Semantic analysis failed: in class Main, method main: arithmetic operator + requires Int operands
+
+-- Method Return Type Mismatch with Parent
+Errors found cannot assemble. Exiting...
+[Semantic Error] Method foo in class Child does not match return type of parent method
+
+-- Incorrect Operand Types for Arithmetic Operators
+Errors found cannot assemble. Exiting...
+[Semantic Error] arithmetic operator + requires Int operands
+[Semantic Error] arithmetic operator + requires Int operands
+[Semantic Error] in class Main, method main: arithmetic operator + requires Int operands
+Semantic analysis failed: in class Main, method main: arithmetic operator + requires Int operands
+
+-- Non-Boolean Condition in an If Expression
+Errors found cannot assemble. Exiting...
+[Parser Error] Expected '}' after method body at token 'self' (line 4, col 1)
+[Parser Error] Expected '(' (method) or ':' (attribute) at token ';' (line 4, col 5)
+[Parser Error] Expected feature name (OBJECTID) at token ';' (line 4, col 5)
+
+-- Reserved Attribute Name 'self'
+Errors found cannot assemble. Exiting...
+[Semantic Error] Attribute name 'self' is reserved in class Main
+
+-- Redefinition of a Basic Class
+Errors found cannot assemble. Exiting...
+[Semantic Error] Redefinition of basic class Object
+[Semantic Error] Inheritance cycle detected involving class String
+Semantic analysis failed: inheritance cycle detected involving class String
+
+-- Reserved Parameter Name 'self' in Method
+Errors found cannot assemble. Exiting...
+[Semantic Error] Parameter name 'self' is reserved in method foo
+[Semantic Error] body type Main does not conform to declared return type Int
+[Semantic Error] in class Main, method foo: body type Main does not conform to declared return type Int
+Semantic analysis failed: in class Main, method foo: body type Main does not conform to declared return type Int
+
+-- Undefined Variable
+Errors found cannot assemble. Exiting...
+[Semantic Error] undefined variable x
+[Semantic Error] undefined variable x
+[Semantic Error] in class Main, method main: undefined variable x
+Semantic analysis failed: in class Main, method main: undefined variable x
+

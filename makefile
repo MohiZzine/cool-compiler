@@ -1,26 +1,28 @@
+I ?= tests/semantictest.cool
+O ?= cool_program
+
 CC = clang
 LLC = llc
 OPT = opt
 GO_BUILD = go build -o cool-compiler
 COMPILER = ./cool-compiler
-TARGET = out/cool_program
 
 build:
 	$(GO_BUILD)
 
 ir: build
-	$(COMPILER) -i testcodes/semantictest.cool
+	$(COMPILER) -i $(I)
 
 opt: ir
-	$(OPT) -passes=instcombine,dce out/out.txt -o out/out.opt.ll
+	$(OPT) -passes=mem2reg,dce .out.ir -o .out.opt.ll
 
 asm: opt
-	$(LLC) out/out.opt.ll -o out/out.s
+	$(LLC) .out.opt.ll -o .out.s
 
 link: asm
-	$(CC) out/out.s -o $(TARGET)
-
-all: link
+	$(CC) -no-pie .out.s -o $(O)
 
 clean:
-	rm -f cool-compiler out/out.txt out/out.opt.ll out/out.s $(TARGET)
+	rm -f cool-compiler .out.ir .out.opt.ll .out.s
+
+all: link clean
