@@ -1,4 +1,4 @@
-I ?= tests/semantictest.cool
+I ?= tests/examples/recursion_loops_test.cl
 O ?= cool_program
 
 CC = clang

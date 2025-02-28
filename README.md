@@ -249,11 +249,16 @@ For a full description, please refer to the COOL reference manual.
    cd cool-compiler
    ```
 
-2. **Build the compiler:**
+2. **Compile a cool program:**
 
    ```bash
    make all I=pathtocoolfile [O=pathtooutputbinary]
    ```
+
+   Example:
+   ```bash
+   make all I=r
+   ``` 
 
 ### Usage
 
